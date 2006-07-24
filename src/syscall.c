@@ -50,132 +50,68 @@ path_arg_writable(char **pathlist, pid_t pid, int argno)
 	return 1;
 }
 
+#define CHECK_PATH 1
+#define CHECK_PATH2 2
+
+static struct syscall_def {
+	int no;
+	unsigned int flags;
+	const char *name;
+} system_calls[] = {
+	{ __NR_open, CHECK_PATH, "open" },
+	{ __NR_creat, CHECK_PATH, "creat" },
+	{ __NR_truncate, CHECK_PATH, "truncate" },
+	{ __NR_truncate64, CHECK_PATH, "truncate64" },
+	{ __NR_unlink, CHECK_PATH, "unlink" },
+	{ __NR_link, CHECK_PATH | CHECK_PATH2, "link" },
+	{ __NR_symlink, CHECK_PATH | CHECK_PATH2, "symlink" },
+	{ __NR_rename, CHECK_PATH | CHECK_PATH2, "rename" },
+	{ __NR_mknod, CHECK_PATH, "mknod" },
+	{ __NR_chmod, CHECK_PATH, "chmod" },
+	{ __NR_lchown, CHECK_PATH, "lchown" },
+	{ __NR_chown, CHECK_PATH, "chown" },
+	{ __NR_lchown32, CHECK_PATH, "lchown32" },
+	{ __NR_chown32, CHECK_PATH, "chown32" },
+	{ __NR_mkdir, CHECK_PATH, "mkdir" },
+	{ __NR_rmdir, CHECK_PATH, "rmdir" },
+	{ __NR_mount, CHECK_PATH, "mount" },
+	{ __NR_umount, CHECK_PATH, "umount" },
+	{ __NR_utime, CHECK_PATH, "utime" },
+	{ 0, 0, NULL }
+};
+
 int
 before_syscall(char **pathlist, pid_t pid, int syscall)
 {
-	// too much code duplication, using a table could be better
+	int i;
+	unsigned int flags;
 
+	// exception, we have to check access mode for open
 	if (syscall == __NR_open) {
 		// open(path, flags, mode)
-		unsigned long flags;
 		flags = ptrace(PTRACE_PEEKUSER, pid, 4, 0);
 		if (flags & O_WRONLY || flags & O_RDWR) {
 			if (!path_arg_writable(pathlist, pid, 0))
 				return -1;
 		}
+		return 0;
 	}
 
-	else if (syscall == __NR_creat) {
-		// creat(path, mode)
+	for (i = 0; system_calls[i].name; i++) {
+		if (system_calls[i].no == syscall)
+			goto found;
+	}
+	return 0;
+found:
+	flags = system_calls[i].flags;
+
+	if (flags & CHECK_PATH) {
 		if (!path_arg_writable(pathlist, pid, 0))
 			return -1;
 	}
 
-	else if (syscall == __NR_truncate) {
-		// truncate(path)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_truncate64) {
-		// truncate64(path)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_unlink) {
-		// unlink(path)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_link) {
-		// link(oldname, newname)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
+	if (flags & CHECK_PATH2) {
 		if (!path_arg_writable(pathlist, pid, 1))
-			return -1;
-	}
-
-	else if (syscall == __NR_symlink) {
-		// symlink(oldname, newname)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-		if (!path_arg_writable(pathlist, pid, 1))
-			return -1;
-	}
-
-	else if (syscall == __NR_rename) {
-		// rename(oldname, newname)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-		if (!path_arg_writable(pathlist, pid, 1))
-			return -1;
-	}
-
-	else if (syscall == __NR_mknod) {
-		// mknod(path, mode, dev)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_chmod) {
-		// chmod(path, mode)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_lchown) {
-		// lchown(path, uid, gid)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_chown) {
-		// chown(path, ...)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_lchown32) {
-		// lchown32(path, uid, gid)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_chown32) {
-		// chown32(path, ...)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_mkdir) {
-		// mkdir(path)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_rmdir) {
-		// rmdir(path)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_mount) {
-		// mount(path, ...)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_umount) {
-		// umount(path)
-		if (!path_arg_writable(pathlist, pid, 0))
-			return -1;
-	}
-
-	else if (syscall == __NR_utime) {
-		// utime(path, times)
-		if (!path_arg_writable(pathlist, pid, 0))
 			return -1;
 	}
 
