@@ -17,14 +17,6 @@
 #include <linux/unistd.h>
 #include <fcntl.h>
 
-struct traced_child {
-	pid_t pid;
-	int proc_mem_fd;
-	int need_setup;
-	int in_syscall;
-	unsigned long orig_eax;
-};
-
 static void
 handle_syscall(char **pathlist, pid_t pid, struct traced_child *kid)
 {
@@ -66,14 +58,8 @@ setup_kid(pid_t pid)
 	printf("ptrace opts error %s\n",strerror(errno));
 }
 
-struct traced_children {
-	struct traced_child **children;
-	unsigned int max_children;
-	unsigned int nr_children;
-};
-
 static struct traced_child *
-add_child(struct traced_children *kids, pid_t pid)
+add_child(struct trace_context *ctx, pid_t pid)
 {
 	struct traced_child *kid;
 
@@ -82,45 +68,44 @@ add_child(struct traced_children *kids, pid_t pid)
 	kid->pid = pid;
 	kid->need_setup = 1;
 	// FIXME: check nr < max!!
-	kids->children[kids->nr_children++] = kid;
+	ctx->children[ctx->nr_children++] = kid;
 	return kid;
 }
 
 static struct traced_child *
-find_child(struct traced_children *kids, pid_t pid)
+find_child(struct trace_context *ctx, pid_t pid)
 {
 	int i;
 
-	for (i = 0; kids->children[i]; i++) {
-		if (kids->children[i]->pid == pid)
-			return kids->children[i];
+	for (i = 0; ctx->children[i]; i++) {
+		if (ctx->children[i]->pid == pid)
+			return ctx->children[i];
 	}
 	return NULL;
 }
 
 int
-core_trace_loop(char **pathlist, pid_t pid)
+core_trace_loop(struct trace_context *ctx, pid_t pid)
 {
-	struct traced_children kids;
 	int status;
 	struct traced_child *kid;
 
-	kids.children = calloc(16, sizeof(struct traced_child *));
-	kids.max_children = 16;
-	kids.nr_children = 0;
-	add_child(&kids, pid);
-	kids.children[0]->need_setup = 0;
+	ctx->children = calloc(16, sizeof(struct traced_child *));
+	ctx->max_children = 16;
+	ctx->nr_children = 0;
+	add_child(ctx, pid);
+	ctx->children[0]->need_setup = 0;
 
-	while (kids.nr_children) {
+	while (ctx->nr_children) {
 		pid = wait(&status);
 		if (pid == (pid_t) -1) return -1;
-		kid = find_child(&kids, pid);
+		kid = find_child(ctx, pid);
 		if (!kid) {
 			puts("borkbork");
 			continue;
 		}
 		if (WIFEXITED(status)) {
-			kids.nr_children -= 1;
+			ctx->nr_children -= 1;
 		}
 
 		if (WIFSTOPPED(status)) {
@@ -138,14 +123,14 @@ core_trace_loop(char **pathlist, pid_t pid)
 					int e;
 					e = ptrace(PTRACE_GETEVENTMSG, pid, 0, &kpid);
 					if (e != 0) printf("geteventmsg %s\n", strerror(e));
-					add_child(&kids, kpid);
+					add_child(ctx, kpid);
 				ptrace(PTRACE_SYSCALL, pid, 0, (void*) WSTOPSIG(status));
 				} else {
 					if (kid->in_syscall) {
 						handle_syscall_return(pid, kid);
 						kid->in_syscall = 0;
 					} else {
-						handle_syscall(pathlist, pid, kid);
+						handle_syscall(ctx->pathlist, pid, kid);
 						kid->in_syscall = 1;
 					}
 				}

@@ -15,10 +15,28 @@
 #include <unistd.h>
 #include <signal.h>
 
+struct traced_child {
+	pid_t pid;
+	struct traced_child *next;
+	struct traced_child *prev;
+	int proc_mem_fd;
+	int need_setup;
+	int in_syscall;
+	unsigned long orig_eax;
+};
+
+struct trace_context {
+	PyObject *func;
+	char **pathlist;
+	struct traced_child **children;
+	unsigned int max_children;
+	unsigned int nr_children;
+};
+
 int path_writable(char **pathlist, pid_t pid, char *path);
 void free_pathlist(char **pathlist);
 char **make_pathlist(PyObject *paths);
 
 int before_syscall(char **pathlist, pid_t pid, int syscall);
 
-int core_trace_loop(char **pathlist, pid_t pid);
+int core_trace_loop(struct trace_context *ctx, pid_t pid);

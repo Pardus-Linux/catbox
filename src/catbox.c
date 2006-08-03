@@ -23,7 +23,7 @@ static void sigusr1(int dummy) {
 }
 
 static PyObject *
-do_run(PyObject *func, char **pathlist)
+do_run(struct trace_context *ctx)
 {
 	void (*oldsig)(int);
 	pid_t pid;
@@ -43,7 +43,7 @@ do_run(PyObject *func, char **pathlist)
 		kill(getppid(), SIGUSR1);
 		while (!got_sig) ;
 
-		PyObject_Call(func, PyTuple_New(0), NULL);
+		PyObject_Call(ctx->func, PyTuple_New(0), NULL);
 		exit(0);
 	}
 
@@ -55,7 +55,7 @@ do_run(PyObject *func, char **pathlist)
 	setup_kid(pid);
 	ptrace(PTRACE_SYSCALL, pid, 0, (void *) SIGUSR1);
 
-	core_trace_loop(pathlist, pid);
+	core_trace_loop(ctx, pid);
 
 	Py_INCREF(Py_None);
 	return Py_None;
@@ -70,27 +70,28 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		NULL
 	};
 	PyObject *ret;
-	PyObject *func;
 	PyObject *paths = NULL;
-	char **pathlist = NULL;
+	struct trace_context ctx;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist, &func, &paths))
+	memset(&ctx, 0, sizeof(struct trace_context));
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist, &ctx.func, &paths))
 		return NULL;
 
-	if (PyCallable_Check(func) == 0) {
+	if (PyCallable_Check(ctx.func) == 0) {
 		PyErr_SetString(PyExc_TypeError, "First argument should be a callable function");
 		return NULL;
 	}
 
 	if (paths) {
-		pathlist = make_pathlist(paths);
-		if (!pathlist) return NULL;
+		ctx.pathlist = make_pathlist(paths);
+		if (!ctx.pathlist) return NULL;
 	}
 
-	ret = do_run(func, pathlist);
+	ret = do_run(&ctx);
 
-	if (pathlist) {
-		free_pathlist(pathlist);
+	if (ctx.pathlist) {
+		free_pathlist(ctx.pathlist);
 	}
 
 	return ret;
