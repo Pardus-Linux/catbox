@@ -17,8 +17,6 @@
 
 struct traced_child {
 	pid_t pid;
-	struct traced_child *next;
-	struct traced_child *prev;
 	int proc_mem_fd;
 	int need_setup;
 	int in_syscall;
@@ -28,9 +26,8 @@ struct traced_child {
 struct trace_context {
 	PyObject *func;
 	char **pathlist;
-	struct traced_child **children;
-	unsigned int max_children;
 	unsigned int nr_children;
+	struct traced_child children[512];
 };
 
 int path_writable(char **pathlist, pid_t pid, char *path);

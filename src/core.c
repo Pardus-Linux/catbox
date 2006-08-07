@@ -58,18 +58,15 @@ setup_kid(pid_t pid)
 	printf("ptrace opts error %s\n",strerror(errno));
 }
 
-static struct traced_child *
+static void
 add_child(struct trace_context *ctx, pid_t pid)
 {
 	struct traced_child *kid;
 
-	kid = calloc(1, sizeof(struct traced_child));
-	if (!kid) return NULL;
+	kid = &ctx->children[ctx->nr_children++];
+	memset(kid, 0, sizeof(struct traced_child));
 	kid->pid = pid;
 	kid->need_setup = 1;
-	// FIXME: check nr < max!!
-	ctx->children[ctx->nr_children++] = kid;
-	return kid;
 }
 
 static struct traced_child *
@@ -77,11 +74,26 @@ find_child(struct trace_context *ctx, pid_t pid)
 {
 	int i;
 
-	for (i = 0; ctx->children[i]; i++) {
-		if (ctx->children[i]->pid == pid)
-			return ctx->children[i];
+	for (i = 0; i < ctx->nr_children; i++) {
+		if (ctx->children[i].pid == pid)
+			return &ctx->children[i];
 	}
 	return NULL;
+}
+
+static void
+rem_child(struct trace_context *ctx, pid_t pid)
+{
+	int i;
+
+	for (i = 0; i < ctx->nr_children; i++) {
+		if (ctx->children[i].pid == pid)
+			goto do_rem;
+	}
+	puts("bjorkbjork");
+do_rem:
+	ctx->nr_children -= 1;
+	ctx->children[i] = ctx->children[ctx->nr_children];
 }
 
 int
@@ -90,11 +102,9 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 	int status;
 	struct traced_child *kid;
 
-	ctx->children = calloc(16, sizeof(struct traced_child *));
-	ctx->max_children = 16;
 	ctx->nr_children = 0;
 	add_child(ctx, pid);
-	ctx->children[0]->need_setup = 0;
+	ctx->children[0].need_setup = 0;
 
 	while (ctx->nr_children) {
 		pid = wait(&status);
@@ -105,7 +115,7 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 			continue;
 		}
 		if (WIFEXITED(status)) {
-			ctx->nr_children -= 1;
+			rem_child(ctx, pid);
 		}
 
 		if (WIFSTOPPED(status)) {
