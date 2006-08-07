@@ -39,11 +39,27 @@ do_run(struct trace_context *ctx)
 
 	if (pid == 0) {
 		// child process
+		PyObject *ret;
 		ptrace(PTRACE_TRACEME, 0, 0, 0);
 		kill(getppid(), SIGUSR1);
 		while (!got_sig) ;
 
-		PyObject_Call(ctx->func, PyTuple_New(0), NULL);
+		ret = PyObject_Call(ctx->func, PyTuple_New(0), NULL);
+		if (!ret) {
+			PyObject *e;
+			PyObject *val;
+			PyObject *tb;
+			PyErr_Fetch(&e, &val, &tb);
+			if (PyErr_GivenExceptionMatches(e, PyExc_SystemExit)) {
+				// extract exit code
+				if (PyInt_Check(val))
+					exit(PyInt_AsLong(val));
+				else
+					exit(2);
+			}
+			// error
+			exit(1);
+		}
 		exit(0);
 	}
 
@@ -55,10 +71,7 @@ do_run(struct trace_context *ctx)
 	setup_kid(pid);
 	ptrace(PTRACE_SYSCALL, pid, 0, (void *) SIGUSR1);
 
-	core_trace_loop(ctx, pid);
-
-	Py_INCREF(Py_None);
-	return Py_None;
+	return core_trace_loop(ctx, pid);
 }
 
 static PyObject *

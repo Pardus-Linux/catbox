@@ -96,10 +96,11 @@ do_rem:
 	ctx->children[i] = ctx->children[ctx->nr_children];
 }
 
-int
+PyObject *
 core_trace_loop(struct trace_context *ctx, pid_t pid)
 {
 	int status;
+	long retcode = 0;
 	struct traced_child *kid;
 
 	ctx->nr_children = 0;
@@ -108,15 +109,20 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 
 	while (ctx->nr_children) {
 		pid = wait(&status);
-		if (pid == (pid_t) -1) return -1;
+		if (pid == (pid_t) -1) return NULL;
 		kid = find_child(ctx, pid);
 		if (!kid) {
 			puts("borkbork");
 			continue;
 		}
 		if (WIFEXITED(status)) {
+			if (kid == &ctx->children[0]) {
+				// keep ret value
+				retcode = WEXITSTATUS(status);
+			}
 			rem_child(ctx, pid);
 		}
+		// FIXME: handle WIFSIGNALLED here
 
 		if (WIFSTOPPED(status)) {
 			if (WSTOPSIG(status) == SIGSTOP && kid->need_setup) {
@@ -149,5 +155,6 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 			}
 		}
 	}
-	return 0;
+
+	return PyInt_FromLong(retcode);
 }

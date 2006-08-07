@@ -36,4 +36,4 @@ char **make_pathlist(PyObject *paths);
 
 int before_syscall(char **pathlist, pid_t pid, int syscall);
 
-int core_trace_loop(struct trace_context *ctx, pid_t pid);
+PyObject *core_trace_loop(struct trace_context *ctx, pid_t pid);
