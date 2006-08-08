@@ -9,12 +9,14 @@ def tryWrite(who, path):
         f = file(path, "w")
         f.write("hello world\n")
         f.close()
-        print "%s wrote '%s'" % (who, path)
-    except Exception, e:
-        tmp = str(e.__class__)
-        if '.' in tmp:
-            tmp = tmp.split('.')[-1]
-        print "%s cannot write '%s'\n  %s: %s" % (who, path, tmp, e)
+    except IOError, e:
+        if e.errno == 13:
+            return 0
+        print "Sandbox error in %s: cannot write '%s': %s" % (who, path, e)
+        return 1
+    
+    print "Sandbox violation in %s: wrote '%s'" % (who, path)
+    return 1
 
 def test():
     pid = os.fork()
@@ -23,9 +25,8 @@ def test():
         sys.exit(0)
 
     if pid == 0:
-        tryWrite("Child: ", "/tmp/catboxtest.txt")
+        tryWrite("child", "/tmp/catboxtest.txt")
     else:
-        tryWrite("Parent: ", "/tmp/catboxtest.txt")
+        tryWrite("parent", "/tmp/catboxtest.txt")
 
 catbox.run(test, writable_paths=[os.getcwd()])
-

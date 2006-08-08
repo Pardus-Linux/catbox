@@ -22,5 +22,6 @@ def test4():
 
 tests = (test1, test2, test3, test4)
 ret = map(catbox.run, tests)
-print ret
-
+if ret != [ 0, 1, 0, 3]:
+    print "Return codes are wrong, expected [0, 1, 0, 3] got", ret
+    sys.exit(1)
