@@ -151,7 +151,7 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 					}
 				}
 			} else {
-				ptrace(PTRACE_CONT, pid, 0, (void*) WSTOPSIG(status));
+				ptrace(PTRACE_SYSCALL, pid, 0, (void*) WSTOPSIG(status));
 			}
 		}
 	}

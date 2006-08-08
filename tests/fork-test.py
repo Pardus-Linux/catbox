@@ -4,7 +4,7 @@ import os
 import catbox
 import sys
 
-def tryWrite(who, path):
+def tryWrite(who, path="/tmp/catboxtest.txt"):
     try:
         f = file(path, "w")
         f.write("hello world\n")
@@ -18,15 +18,23 @@ def tryWrite(who, path):
     print "Sandbox violation in %s: wrote '%s'" % (who, path)
     return 1
 
-def test():
-    pid = os.fork()
-    if pid == -1:
-        print "fork failed"
-        sys.exit(0)
+def testNode(level):
+    pid = 1
+    if level < 3:
+        pid = os.fork()
+        if pid == -1:
+            print "fork failed"
+            sys.exit(0)
 
     if pid == 0:
-        tryWrite("child", "/tmp/catboxtest.txt")
-    else:
-        tryWrite("parent", "/tmp/catboxtest.txt")
+        testNode(level + 1)
+        tryWrite("child*%d" % level)
+
+def test():
+    tryWrite("parent")
+    for i in range(3):
+        testNode(1)
+        tryWrite("parent")
+    tryWrite("parent")
 
 catbox.run(test, writable_paths=[os.getcwd()])
