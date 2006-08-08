@@ -46,7 +46,7 @@ path_writable(char **pathlist, pid_t pid, char *path)
 		char *tmp;
 		pwd = get_cwd(pid);
 		if (!pwd) return 0;
-		tmp = malloc(strlen(path) + 1 + strlen(pwd));
+		tmp = malloc(strlen(path) + 2 + strlen(pwd));
 		if (!tmp) return 0;
 		sprintf(tmp, "%s/%s", pwd, path);
 		path = tmp;
