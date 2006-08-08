@@ -34,6 +34,7 @@ int
 path_writable(char **pathlist, pid_t pid, char *path)
 {
 	// FIXME: spaghetti code ahead
+	char *oldpath = path;
 	char *canonical = NULL;
 	char *pwd = NULL;
 	int ret = 0;
@@ -83,7 +84,9 @@ turka:
 out:
 	if (canonical) free(canonical);
 	if (pwd) free(path);
-
+	if (ret == 0) {
+		printf("CATBOX: path not allowed [%s]\n", oldpath);
+	}
 	return ret;
 }
 
