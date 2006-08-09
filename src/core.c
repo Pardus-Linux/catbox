@@ -18,26 +18,27 @@
 #include <fcntl.h>
 
 static void
-handle_syscall(char **pathlist, pid_t pid, struct traced_child *kid)
+handle_syscall(struct trace_context *ctx, struct traced_child *kid)
 {
 	int syscall;
-	struct user_regs_struct u_in, u_out;
+	struct user_regs_struct u_in;
 
-	ptrace(PTRACE_GETREGS, pid, 0, &u_in);
+	ptrace(PTRACE_GETREGS, kid->pid, 0, &u_in);
 	syscall = u_in.orig_eax;
 
-	if (before_syscall(pathlist, pid, syscall) != 0) {
+	if (before_syscall(ctx, kid->pid, syscall) != 0) {
 		kid->orig_eax = u_in.orig_eax;
-		ptrace(PTRACE_POKEUSER, pid, 44, 0xbadca11);
+		ptrace(PTRACE_POKEUSER, kid->pid, 44, 0xbadca11);
 	}
-	ptrace(PTRACE_SYSCALL, pid, 0, 0);
+	ptrace(PTRACE_SYSCALL, kid->pid, 0, 0);
 }
 
 static void
 handle_syscall_return(pid_t pid, struct traced_child *kid)
 {
 	int syscall;
-	struct user_regs_struct u_in, u_out;
+	struct user_regs_struct u_in;
+
 	ptrace(PTRACE_GETREGS, pid, 0, &u_in);
 	syscall = u_in.orig_eax;
 	if (syscall == 0xbadca11) {
@@ -146,7 +147,7 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 						handle_syscall_return(pid, kid);
 						kid->in_syscall = 0;
 					} else {
-						handle_syscall(ctx->pathlist, pid, kid);
+						handle_syscall(ctx, kid);
 						kid->in_syscall = 1;
 					}
 				}

@@ -80,6 +80,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 	static char *kwlist[] = {
 		"function",
 		"writable_paths",
+		"logger",
 		NULL
 	};
 	PyObject *ret;
@@ -88,11 +89,16 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 
 	memset(&ctx, 0, sizeof(struct trace_context));
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist, &ctx.func, &paths))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OO", kwlist, &ctx.func, &paths, &ctx.log_func))
 		return NULL;
 
 	if (PyCallable_Check(ctx.func) == 0) {
 		PyErr_SetString(PyExc_TypeError, "First argument should be a callable function");
+		return NULL;
+	}
+
+	if (ctx.log_func && !PyCallable_Check(ctx.log_func)) {
+		PyErr_SetString(PyExc_TypeError, "Logger should be a callable function");
 		return NULL;
 	}
 

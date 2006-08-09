@@ -26,6 +26,7 @@ struct traced_child {
 struct trace_context {
 	PyObject *func;
 	char **pathlist;
+	PyObject *log_func;
 	unsigned int nr_children;
 	struct traced_child children[512];
 };
@@ -34,6 +35,6 @@ int path_writable(char **pathlist, pid_t pid, char *path);
 void free_pathlist(char **pathlist);
 char **make_pathlist(PyObject *paths);
 
-int before_syscall(char **pathlist, pid_t pid, int syscall);
+int before_syscall(struct trace_context *ctx, pid_t pid, int syscall);
 
 PyObject *core_trace_loop(struct trace_context *ctx, pid_t pid);

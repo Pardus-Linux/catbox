@@ -37,15 +37,23 @@ get_str(pid_t pid, unsigned long ptr)
 }
 
 static int
-path_arg_writable(char **pathlist, pid_t pid, int argno)
+path_arg_writable(struct trace_context *ctx, pid_t pid, int argno)
 {
 	unsigned long arg;
 	char *path;
 
 	arg = ptrace(PTRACE_PEEKUSER, pid, argno * 4, 0);
 	path = get_str(pid, arg);
-	if (!path_writable(pathlist, pid, path))
+	if (!path_writable(ctx->pathlist, pid, path)) {
+		if (ctx->log_func) {
+			PyObject *args;
+			args = PyTuple_New(2);
+			PyTuple_SetItem(args, 0, PyString_FromString("denied"));
+			PyTuple_SetItem(args, 1, PyString_FromString(path));
+			PyObject_Call(ctx->log_func, args, NULL);
+		}
 		return 0;
+	}
 
 	return 1;
 }
@@ -81,7 +89,7 @@ static struct syscall_def {
 };
 
 int
-before_syscall(char **pathlist, pid_t pid, int syscall)
+before_syscall(struct trace_context *ctx, pid_t pid, int syscall)
 {
 	int i;
 	unsigned int flags;
@@ -91,7 +99,7 @@ before_syscall(char **pathlist, pid_t pid, int syscall)
 		// open(path, flags, mode)
 		flags = ptrace(PTRACE_PEEKUSER, pid, 4, 0);
 		if (flags & O_WRONLY || flags & O_RDWR) {
-			if (!path_arg_writable(pathlist, pid, 0))
+			if (!path_arg_writable(ctx, pid, 0))
 				return -1;
 		}
 		return 0;
@@ -106,12 +114,12 @@ found:
 	flags = system_calls[i].flags;
 
 	if (flags & CHECK_PATH) {
-		if (!path_arg_writable(pathlist, pid, 0))
+		if (!path_arg_writable(ctx, pid, 0))
 			return -1;
 	}
 
 	if (flags & CHECK_PATH2) {
-		if (!path_arg_writable(pathlist, pid, 1))
+		if (!path_arg_writable(ctx, pid, 1))
 			return -1;
 	}
 
