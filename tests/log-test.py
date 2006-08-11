@@ -29,7 +29,7 @@ def test():
 logerror = 1
 
 def logger(event, data):
-    if event == "denied" and data == "/tmp/catboxtest.txt":
+    if event == "denied" and data[0] == "open" and data[1] == "/tmp/catboxtest.txt":
         global logerror
         logerror = 0
     else:

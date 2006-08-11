@@ -37,7 +37,7 @@ get_str(pid_t pid, unsigned long ptr)
 }
 
 static int
-path_arg_writable(struct trace_context *ctx, pid_t pid, int argno)
+path_arg_writable(struct trace_context *ctx, pid_t pid, int argno, const char *name)
 {
 	unsigned long arg;
 	char *path;
@@ -47,9 +47,17 @@ path_arg_writable(struct trace_context *ctx, pid_t pid, int argno)
 	if (!path_writable(ctx->pathlist, pid, path)) {
 		if (ctx->log_func) {
 			PyObject *args;
+			PyObject *list;
+			PyObject *a = PyString_FromString(name);
+			PyObject *b = PyString_FromString(path);
 			args = PyTuple_New(2);
 			PyTuple_SetItem(args, 0, PyString_FromString("denied"));
-			PyTuple_SetItem(args, 1, PyString_FromString(path));
+			list = PyList_New(2);
+			PyList_SetItem(list, 0, a);
+			PyList_SetItem(list, 1, b);
+			//PyObject_SetAttrString(list, "operation", a);
+			//PyObject_SetAttrString(list, "path", b);
+			PyTuple_SetItem(args, 1, list);
 			PyObject_Call(ctx->log_func, args, NULL);
 		}
 		return 0;
@@ -93,13 +101,14 @@ before_syscall(struct trace_context *ctx, pid_t pid, int syscall)
 {
 	int i;
 	unsigned int flags;
+	const char *name;
 
 	// exception, we have to check access mode for open
 	if (syscall == __NR_open) {
 		// open(path, flags, mode)
 		flags = ptrace(PTRACE_PEEKUSER, pid, 4, 0);
 		if (flags & O_WRONLY || flags & O_RDWR) {
-			if (!path_arg_writable(ctx, pid, 0))
+			if (!path_arg_writable(ctx, pid, 0, "open"))
 				return -1;
 		}
 		return 0;
@@ -112,14 +121,15 @@ before_syscall(struct trace_context *ctx, pid_t pid, int syscall)
 	return 0;
 found:
 	flags = system_calls[i].flags;
+	name = system_calls[i].name;
 
 	if (flags & CHECK_PATH) {
-		if (!path_arg_writable(ctx, pid, 0))
+		if (!path_arg_writable(ctx, pid, 0, name))
 			return -1;
 	}
 
 	if (flags & CHECK_PATH2) {
-		if (!path_arg_writable(ctx, pid, 1))
+		if (!path_arg_writable(ctx, pid, 1, name))
 			return -1;
 	}
 
