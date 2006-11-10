@@ -1,8 +1,11 @@
 #!/usr/bin/python
 
 import os
-import catbox
+import catbox.catbox as catbox
 import sys
+
+def logger(event, data):
+    print event, data
 
 def tryWrite(who, path="/tmp/catboxtest.txt"):
     try:
@@ -37,4 +40,4 @@ def test():
         tryWrite("parent")
     tryWrite("parent")
 
-catbox.run(test, writable_paths=[os.getcwd()])
+catbox.run(test, writable_paths=[os.getcwd()], logger=logger)

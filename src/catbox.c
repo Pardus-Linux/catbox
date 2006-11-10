@@ -41,11 +41,12 @@ do_run(struct trace_context *ctx)
 		// child process
 		PyObject *ret;
 		ptrace(PTRACE_TRACEME, 0, 0, 0);
-		kill(getppid(), SIGUSR1);
-		while (!got_sig) ;
+		kill(getppid(), SIGUSR1); //send a signal to parent
+		while (!got_sig) ; //wait for confirmation
 
-		ret = PyObject_Call(ctx->func, PyTuple_New(0), NULL);
-		if (!ret) {
+		ret = PyObject_Call(ctx->func, PyTuple_New(0), NULL); //run the callable
+        
+		if (!ret) { //handle exception
 			PyObject *e;
 			PyObject *val;
 			PyObject *tb;
@@ -64,9 +65,9 @@ do_run(struct trace_context *ctx)
 	}
 
 	// parent process
-	while (!got_sig) ;
-	kill(pid, SIGUSR1);
-	waitpid(pid, NULL, 0);
+	while (!got_sig) ; //wait for the signal from child
+	kill(pid, SIGUSR1); //send a confirmation
+	waitpid(pid, NULL, 0); // ??
 
 	setup_kid(pid);
 	ptrace(PTRACE_SYSCALL, pid, 0, (void *) SIGUSR1);
@@ -79,17 +80,17 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 {
 	static char *kwlist[] = {
 		"function",
+        "ret_object",
 		"writable_paths",
 		"logger",
 		NULL
 	};
-	PyObject *ret;
+ 	PyObject *ret;
 	PyObject *paths = NULL;
 	struct trace_context ctx;
 
 	memset(&ctx, 0, sizeof(struct trace_context));
-
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OO", kwlist, &ctx.func, &paths, &ctx.log_func))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|OO", kwlist, &ctx.func, &ctx.ret_object, &paths, &ctx.log_func))
 		return NULL;
 
 	if (PyCallable_Check(ctx.func) == 0) {
@@ -97,7 +98,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		return NULL;
 	}
 
-	if (ctx.log_func && !PyCallable_Check(ctx.log_func)) {
+	if (ctx.log_func != Py_None && !PyCallable_Check(ctx.log_func)) {
 		PyErr_SetString(PyExc_TypeError, "Logger should be a callable function");
 		return NULL;
 	}
@@ -108,24 +109,24 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 	}
 
 	ret = do_run(&ctx);
-
 	if (ctx.pathlist) {
 		free_pathlist(ctx.pathlist);
 	}
 
-	return ret;
+ 	return ret;
 }
 
+
 static PyMethodDef methods[] = {
-	{ "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS,
-	  "Run given function in a sandbox."},
+    { "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS,
+      "Run given function in a sandbox."},
 	{ NULL, NULL, 0, NULL }
 };
 
 PyMODINIT_FUNC
-initcatbox(void)
+initcatbox_int(void)
 {
 	PyObject *m;
 
-	m = Py_InitModule("catbox", methods);
+	m = Py_InitModule("catbox_int", methods);
 }

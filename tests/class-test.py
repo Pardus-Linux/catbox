@@ -1,8 +1,11 @@
 #!/usr/bin/python
 
 import sys
-import catbox
+import catbox.catbox as catbox
 
+def logger(event, data):
+    print event, data
+    
 class Test:
     def __init__(self, path):
         self.path = path
@@ -16,7 +19,7 @@ class Test:
         sys.exit(2)
     
     def boxedWrite(self):
-        ret = catbox.run(self.write)
+        ret = catbox.run(self.write, logger=logger)
         if ret:
             print "Sandbox error"
             sys.exit(2)

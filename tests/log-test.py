@@ -2,7 +2,7 @@
 
 import sys
 import os
-import catbox
+import catbox.catbox as catbox
 
 def tryWrite(path, legal=True):
     try:
@@ -36,6 +36,6 @@ def logger(event, data):
         print "Unexpected event [%s] [%s]" % (event, data)
 
 ret = catbox.run(test, writable_paths=[os.getcwd()], logger=logger)
-ret += logerror
-sys.exit(ret)
+ret.ret += logerror
+sys.exit(ret.ret)
 

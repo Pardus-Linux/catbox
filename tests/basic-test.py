@@ -2,7 +2,7 @@
 
 import sys
 import os
-import catbox
+import catbox.catbox as catbox
 
 def tryRead(path):
     try:
@@ -38,6 +38,9 @@ def test():
     # Try to write to valid places
     ret += tryWrite("catboxtest.txt")
     sys.exit(ret)
+    
+def logger(event, data):
+    print event, data
 
-ret = catbox.run(test, writable_paths=[os.getcwd()])
-sys.exit(ret)
+ret = catbox.run(test, writable_paths=[os.getcwd()], logger=logger)
+sys.exit(ret.ret)

@@ -23,6 +23,7 @@ distfiles = """
     setup.py
     OKUBENİ
     src/*.c
+    src/*.py
     src/*.h
     tests/*.py
 """
@@ -69,7 +70,8 @@ source = [
 setup(
     name='catbox',
     version=version,
-    ext_modules=[Extension('catbox', source)],
+    ext_modules=[Extension('catbox_int', source)],
+    py_modules = ['catbox.catbox'],
     cmdclass = {
         'install' : Install
     }

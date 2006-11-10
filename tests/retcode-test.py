@@ -2,7 +2,10 @@
 
 import sys
 import os
-import catbox
+import catbox.catbox as catbox
+
+def logger(event, data):
+    print event, data
 
 def test1():
     # correct op, implicit end
@@ -21,7 +24,7 @@ def test4():
     sys.exit(3)
 
 tests = (test1, test2, test3, test4)
-ret = map(catbox.run, tests)
+ret = map(lambda ret: ret.ret, map(catbox.run, tests))
 if ret != [ 0, 1, 0, 3]:
     print "Return codes are wrong, expected [0, 1, 0, 3] got", ret
     sys.exit(1)

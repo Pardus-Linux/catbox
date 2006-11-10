@@ -16,48 +16,42 @@
 #include <linux/user.h>
 #include <linux/unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 
-static void
-handle_syscall(struct trace_context *ctx, struct traced_child *kid)
-{
-	int syscall;
-	struct user_regs_struct u_in;
 
-	ptrace(PTRACE_GETREGS, kid->pid, 0, &u_in);
-	syscall = u_in.orig_eax;
 
-	if (before_syscall(ctx, kid->pid, syscall) != 0) {
-		kid->orig_eax = u_in.orig_eax;
-		ptrace(PTRACE_POKEUSER, kid->pid, 44, 0xbadca11);
-	}
-	ptrace(PTRACE_SYSCALL, kid->pid, 0, 0);
-}
 
-static void
-handle_syscall_return(pid_t pid, struct traced_child *kid)
-{
-	int syscall;
-	struct user_regs_struct u_in;
 
-	ptrace(PTRACE_GETREGS, pid, 0, &u_in);
-	syscall = u_in.orig_eax;
-	if (syscall == 0xbadca11) {
-		ptrace(PTRACE_POKEUSER, pid, 44, kid->orig_eax);
-		ptrace(PTRACE_POKEUSER, pid, 24, -13);
-	}
 
-	ptrace(PTRACE_SYSCALL, pid, 0, 0);
-}
 
+
+
+/*
+    Setup the catbox kid with the right options
+*/
 int
 setup_kid(pid_t pid)
 {
 	int e;
+    //trace clones, forks, vforks (i.e., all kids)
 	e = ptrace(PTRACE_SETOPTIONS, pid, 0,
 		PTRACE_O_TRACECLONE |PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK);
 	if (e != 0)
 	printf("ptrace opts error %s\n",strerror(errno));
 }
+
+
+
+
+
+
+
+
+/*------------------------------------------------------*/
+
+/*
+    child management
+*/
 
 static void
 add_child(struct trace_context *ctx, pid_t pid)
@@ -97,6 +91,71 @@ do_rem:
 	ctx->children[i] = ctx->children[ctx->nr_children];
 }
 
+/*------------------------------------------------------*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+static void
+handle_syscall(struct trace_context *ctx, struct traced_child *kid)
+{
+    int syscall;
+    struct user_regs_struct u_in;
+
+    ptrace(PTRACE_GETREGS, kid->pid, 0, &u_in);
+    syscall = u_in.orig_eax;
+
+    int ret = before_syscall(ctx, kid->pid, syscall);
+    if (ret != 0) {
+        kid->ret = ret;
+        kid->orig_eax = u_in.orig_eax;
+        ptrace(PTRACE_POKEUSER, kid->pid, 44, 0xbadca11); //prevent it by changing syscall
+    }
+    ptrace(PTRACE_SYSCALL, kid->pid, 0, 0);
+}
+
+static void
+handle_syscall_return(pid_t pid, struct traced_child *kid)
+{
+    int syscall;
+    struct user_regs_struct u_in;
+
+    ptrace(PTRACE_GETREGS, pid, 0, &u_in);
+    syscall = u_in.orig_eax;
+    if (syscall == 0xbadca11) {
+        ptrace(PTRACE_POKEUSER, pid, 44, kid->orig_eax); //restore the syscall
+        if( kid->ret < 0 )
+            ptrace(PTRACE_POKEUSER, pid, 24, -EACCES); //EACCES error
+        else if( kid->ret == 2)
+            ptrace(PTRACE_POKEUSER, pid, 4 * EAX, 0); //return 0 for u/gid
+        else
+            ptrace(PTRACE_POKEUSER, pid, 24, 0); //fail silently
+    }
+
+    ptrace(PTRACE_SYSCALL, pid, 0, 0);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 PyObject *
 core_trace_loop(struct trace_context *ctx, pid_t pid)
 {
@@ -106,18 +165,18 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 
 	ctx->nr_children = 0;
 	add_child(ctx, pid);
-	ctx->children[0].need_setup = 0;
+	ctx->children[0].need_setup = 0; //first child doesnt need setup
 
 	while (ctx->nr_children) {
-		pid = wait(&status);
+		pid = wait(&status); //wait for a syscall
 		if (pid == (pid_t) -1) return NULL;
-		kid = find_child(ctx, pid);
+		kid = find_child(ctx, pid); //find the child that did it
 		if (!kid) {
 			puts("borkbork");
 			continue;
 		}
 		if (WIFEXITED(status)) {
-			if (kid == &ctx->children[0]) {
+			if (kid == &ctx->children[0]) { //if it is our first child
 				// keep ret value
 				retcode = WEXITSTATUS(status);
 			}
@@ -125,12 +184,14 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 		}
 		// FIXME: handle WIFSIGNALLED here
 
-		if (WIFSTOPPED(status)) {
-			if (WSTOPSIG(status) == SIGSTOP && kid->need_setup) {
+		if (WIFSTOPPED(status)) { //kid stopped for some reason
+			if (WSTOPSIG(status) == SIGSTOP && kid->need_setup) { //kid needs setup
 				setup_kid(pid);
 				kid->need_setup = 0;
-				ptrace(PTRACE_SYSCALL, pid, 0, 0);
-			} else if (WSTOPSIG(status) == SIGTRAP) {
+				ptrace(PTRACE_SYSCALL, pid, 0, 0); //trace syscalls in new kid
+
+            //trap an event: syscall, or (clone, fork, vfork)
+			} else if (WSTOPSIG(status) == SIGTRAP) { 
 				unsigned int event;
 				event = (status >> 16) & 0xffff;
 				if (event == PTRACE_EVENT_FORK
@@ -138,11 +199,12 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 					|| event == PTRACE_EVENT_VFORK) {
 					pid_t kpid;
 					int e;
-					e = ptrace(PTRACE_GETEVENTMSG, pid, 0, &kpid);
+					e = ptrace(PTRACE_GETEVENTMSG, pid, 0, &kpid); //get the new kid's pid
 					if (e != 0) printf("geteventmsg %s\n", strerror(e));
-					add_child(ctx, kpid);
-				ptrace(PTRACE_SYSCALL, pid, 0, (void*) WSTOPSIG(status));
-				} else {
+					add_child(ctx, kpid);  //add the new kid (setup will be done later)
+				    ptrace(PTRACE_SYSCALL, pid, 0, (void*) WSTOPSIG(status)); //continue till exit
+
+				} else { //trap the syscall
 					if (kid->in_syscall) {
 						handle_syscall_return(pid, kid);
 						kid->in_syscall = 0;
@@ -157,5 +219,5 @@ core_trace_loop(struct trace_context *ctx, pid_t pid)
 		}
 	}
 
-	return PyInt_FromLong(retcode);
+ 	return PyInt_FromLong(retcode);
 }

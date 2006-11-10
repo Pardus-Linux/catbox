@@ -21,12 +21,15 @@ struct traced_child {
 	int need_setup;
 	int in_syscall;
 	unsigned long orig_eax;
+    unsigned int  ret;   
 };
+
 
 struct trace_context {
 	PyObject *func;
 	char **pathlist;
 	PyObject *log_func;
+    PyObject *ret_object;
 	unsigned int nr_children;
 	struct traced_child children[512];
 };

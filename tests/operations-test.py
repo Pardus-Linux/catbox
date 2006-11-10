@@ -2,8 +2,13 @@
 
 import sys
 import os
-import catbox
+import catbox.catbox as catbox
 import stat
+
+
+def logger(event, data):
+    print event, data
+
 
 def tryOp(name, op, path):
     try:
@@ -36,5 +41,5 @@ if os.path.isdir("catboxtestdir.deleteme"):
 os.mkdir("catboxtestdir.deleteme")
 file("catboxtest.deleteme", "w").write("deleteme\n")
 
-ret = catbox.run(test, writable_paths=[])
-sys.exit(ret)
+ret = catbox.run(test, writable_paths=[], logger=logger)
+sys.exit(ret.ret)
