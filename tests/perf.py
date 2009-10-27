@@ -2,10 +2,7 @@
 
 import os
 import time
-import catbox.catbox as catbox
-
-def logger(event, data):
-    print event, data
+import catbox
 
 def tryWrite(path):
     try:
@@ -31,8 +28,7 @@ def badCase():
 def test():
     allowed = [os.getcwd()]
     print "Normal open/write time:      %f" % timeWrite("catboxtest.txt")
-    catbox.run(goodCase, allowed, logger)
-    catbox.run(badCase, allowed, logger)
+    catbox.run(goodCase, allowed)
+    catbox.run(badCase, allowed)
 
 test()
-

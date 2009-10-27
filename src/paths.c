@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2006, TUBITAK/UEKAE
+** Copyright (c) 2006-2007, TUBITAK/UEKAE
 **
 ** This program is free software; you can redistribute it and/or modify it
 ** under the terms of the GNU General Public License as published by the
@@ -30,61 +30,112 @@ get_cwd(pid_t pid)
 	return buf2;
 }
 
-int
-path_writable(char **pathlist, pid_t pid, char *path)
+char *
+catbox_paths_canonical(pid_t pid, char *path, int dont_follow)
 {
-	// FIXME: spaghetti code ahead
 	char *canonical = NULL;
-	char *pwd = NULL;
-	int ret = 0;
-	int i;
-	int flag = 0;
+	char *old_path = NULL;
+	char *tmp;
+	size_t len;
 
-	if (!pathlist) return 0;
-
+	// prepend current dir to the relative paths
 	if (path[0] != '/') {
-		char *tmp;
-		pwd = get_cwd(pid);
-		if (!pwd) return 0;
-		tmp = malloc(strlen(path) + 2 + strlen(pwd));
-		if (!tmp) return 0;
-		sprintf(tmp, "%s/%s", pwd, path);
+		char *cwd;
+
+		cwd = get_cwd(pid);
+		if (!cwd) return NULL;
+		tmp = malloc(strlen(path) + 2 + strlen(cwd));
+		if (!tmp) return NULL;
+		sprintf(tmp, "%s/%s", cwd, path);
+		old_path = path;
 		path = tmp;
 	}
 
-	canonical = realpath(path, NULL);
+	// Special case for very special /proc/self symlink
+	// This link resolves to the /proc/1234 (pid number)
+	// since we are parent process, we get a diffent view
+	// of filesystem if we let realpath to resolve this.
+	if (strncmp(path, "/proc/self", 10) == 0) {
+		tmp = malloc(strlen(path) + 24);
+		if (!tmp) {
+			if (old_path) free(path);
+			return NULL;
+		}
+		sprintf(tmp, "/proc/%d/%s", pid, path + 10);
+		if (old_path)
+			free(path);
+		else
+			old_path = path;
+		path = tmp;
+	}
+
+	// strip last character if it is a dir separator
+	len = strlen(path);
+	if (path[len-1] == '/') {
+		if (!old_path) {
+			old_path = path;
+			path = strdup(path);
+			if (!path) return NULL;
+		}
+		path[len-1] = '\0';
+	}
+
+	// resolve symlinks in the path
+	if (!dont_follow) {
+		canonical = realpath(path, NULL);
+		if (!canonical && errno == ENAMETOOLONG) {
+			if (old_path) free(path);
+			return NULL;
+		}
+	}
 	if (!canonical) {
-		if (errno == ENOENT) {
+		if (dont_follow || errno == ENOENT) {
+			if (!old_path) {
+				old_path = path;
+				path = strdup(path);
+				if (!path) return NULL;
+			}
 			char *t;
 			t = strrchr(path, '/');
 			if (t && t[1] != '\0') {
-				++t;
 				*t = '\0';
-				flag = 1;
 				canonical = realpath(path, NULL);
-				if (!canonical) {
-					goto out;
+				if (canonical) {
+					char *tmp;
+					++t;
+					tmp = malloc(strlen(canonical) + 2 + strlen(t));
+					if (tmp) {
+						sprintf(tmp, "%s/%s", canonical, t);
+						free(canonical);
+						canonical = tmp;
+					}
 				}
-				goto turka;
 			}
 		}
-		goto out;
 	}
-turka:
+
+	if (old_path) free(path);
+
+	return canonical;
+}
+
+int
+path_writable(char **pathlist, const char *canonical, int mkdir_case)
+{
+	int i;
+
+	if (!pathlist) return 0;
+
 	for (i = 0; pathlist[i]; i++) {
 		size_t size = strlen(pathlist[i]);
-		if (flag == 1 && pathlist[i][size-1] == '/') --size;
+		if (pathlist[i][size-1] == '/' && strlen(canonical) == (size - 1)) --size;
 		if (strncmp(pathlist[i], canonical, size) == 0) {
-			ret = 1;
-			goto out;
+			return 1;
+		} else if (mkdir_case && strncmp(pathlist[i], canonical, strlen(canonical)) == 0) {
+			return -1;
 		}
 	}
-
-out:
-	if (canonical) free(canonical);
-	if (pwd) free(path);
-
-	return ret;
+	return 0;
 }
 
 void

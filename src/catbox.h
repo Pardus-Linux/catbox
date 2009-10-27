@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2006, TUBITAK/UEKAE
+** Copyright (c) 2006-2007, TUBITAK/UEKAE
 **
 ** This program is free software; you can redistribute it and/or modify it
 ** under the terms of the GNU General Public License as published by the
@@ -15,29 +15,56 @@
 #include <unistd.h>
 #include <signal.h>
 
+/* per process tracking data */
 struct traced_child {
+	/* process id of the traced kid */
 	pid_t pid;
-	int proc_mem_fd;
+	/* we will get a stop signal from kid and will setup tracing flags */
 	int need_setup;
+	/* kid is in syscall */
 	int in_syscall;
+	/* kid called execve, and we'll get spurious sigtrap in next wait */
+	int in_execve;
+	/* original syscall number when a syscall is faked */
 	unsigned long orig_eax;
-    unsigned int  ret;   
+	/* faked syscall will fail with this error code */
+	int error_code;
+	/* used for hash table collision handling */
+	struct traced_child *next;
 };
 
+#define PID_TABLE_SIZE 367
 
+/* general tracking data */
 struct trace_context {
+	/* main callable */
 	PyObject *func;
+	/* arguments to callable */
+	PyObject *func_args;
+	/* violation logger function */
+	PyObject *logger;
+	/* this object keeps everything to be returned to the caller */
+	PyObject *retval;
+	/* allowed path list */
 	char **pathlist;
-	PyObject *log_func;
-    PyObject *ret_object;
+	/* is network connection allowed */
+	int network_allowed;
+	/* per process data table, hashed by process id */
 	unsigned int nr_children;
-	struct traced_child children[512];
+	struct traced_child *children[PID_TABLE_SIZE];
+	/* first child pointer is kept for determining return code */
+	struct traced_child *first_child;
 };
 
-int path_writable(char **pathlist, pid_t pid, char *path);
+char *catbox_paths_canonical(pid_t pid, char *path, int dont_follow);
+int path_writable(char **pathlist, const char *canonical, int mkdir_case);
 void free_pathlist(char **pathlist);
 char **make_pathlist(PyObject *paths);
 
-int before_syscall(struct trace_context *ctx, pid_t pid, int syscall);
+int catbox_retval_init(struct trace_context *ctx);
+void catbox_retval_set_exit_code(struct trace_context *ctx, int retcode);
+void catbox_retval_add_violation(struct trace_context *ctx, const char *operation, const char *path, const char *canonical);
 
-PyObject *core_trace_loop(struct trace_context *ctx, pid_t pid);
+PyObject *catbox_core_run(struct trace_context *ctx);
+
+void catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid);

@@ -1,0 +1,8 @@
+* return callable's return value via some magic
+* check that dir exists for mkdir EEXIST case, write complete test
+* implement action=log/deny/stop argument, write a test case
+* reactivate chown/chmod log code
+* allow optional logging of read accesses
+* need ability to whitelist at least reading of some files
+* anything else? :)
+

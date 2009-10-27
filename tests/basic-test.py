@@ -2,45 +2,34 @@
 
 import sys
 import os
-import catbox.catbox as catbox
+import catbox
 
-def tryRead(path):
-    try:
-        file(path).read()
-        return 0
-    except Exception, e:
-        print "Sandbox error: cannot read '%s': %s" % (path, e)
-        return 1
+def good_read():
+    file("/etc/pardus-release").read()
 
-def tryWrite(path, legal=True):
-    try:
-        f = file(path, "w")
-        f.write("hello world\n")
-        f.close()
-    except IOError, e:
-        if e.errno == 13 and not legal:
-            return 0
-        print "Sandbox error: cannot write '%s': %s" % (path, e)
-        return 1
-    
-    if not legal:
-        print "Sandbox violation: wrote '%s'" % path
-        return 1
-    return 0
+def good_write():
+    file("catboxtest.txt", "w").write("hello world\n")
 
-def test():
-    ret = 0
-    # Simple test to see that read access is not denied
-    ret += tryRead("/etc/issue")
-    # Try to write to invalid places
-    ret += tryWrite("/tmp/catboxtest.txt", False)
-    ret += tryWrite("%s/catboxtest.txt" % '/'.join(os.getcwd().split('/')[:-1]), False)
-    # Try to write to valid places
-    ret += tryWrite("catboxtest.txt")
-    sys.exit(ret)
-    
-def logger(event, data):
-    print event, data
+def bad_write():
+    file("/tmp/catboxtest.txt", "w").write("hello world\n")
 
-ret = catbox.run(test, writable_paths=[os.getcwd()], logger=logger)
-sys.exit(ret.ret)
+def bad_write2():
+    file("%s/catboxtest.txt" % '/'.join(os.getcwd().split('/')[:-1]), "w").write("Hello world\n")
+
+ret = catbox.run(good_read, writable_paths=[os.getcwd()])
+assert(ret.code == 0)
+assert(ret.violations == [])
+
+ret = catbox.run(good_write, writable_paths=[os.getcwd()])
+assert(ret.code == 0)
+assert(ret.violations == [])
+
+ret = catbox.run(bad_write, writable_paths=[os.getcwd()])
+assert(ret.code == 1)
+assert(len(ret.violations) == 1)
+assert(ret.violations[0][0] == "open")
+
+ret = catbox.run(bad_write2, writable_paths=[os.getcwd() + "/"])
+assert(ret.code == 1)
+assert(len(ret.violations) == 1)
+assert(ret.violations[0][0] == "open")

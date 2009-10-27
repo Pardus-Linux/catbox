@@ -1,5 +1,5 @@
 /*
-** Copyright (c) 2006, TUBITAK/UEKAE
+** Copyright (c) 2006-2007, TUBITAK/UEKAE
 **
 ** This program is free software; you can redistribute it and/or modify it
 ** under the terms of the GNU General Public License as published by the
@@ -12,93 +12,65 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <sys/ptrace.h>
-#include <linux/user.h>
 #include <linux/unistd.h>
 
-int got_sig = 0;
-
-static void sigusr1(int dummy) {
-	got_sig = 1;
-}
-
-static PyObject *
-do_run(struct trace_context *ctx)
-{
-	void (*oldsig)(int);
-	pid_t pid;
-
-	got_sig = 0;
-	oldsig = signal(SIGUSR1, sigusr1);
-
-	pid = fork();
-	if (pid == (pid_t) -1) {
-		PyErr_SetString(PyExc_RuntimeError, "fork failed");
-		return NULL;
-	}
-
-	if (pid == 0) {
-		// child process
-		PyObject *ret;
-		ptrace(PTRACE_TRACEME, 0, 0, 0);
-		kill(getppid(), SIGUSR1); //send a signal to parent
-		while (!got_sig) ; //wait for confirmation
-
-		ret = PyObject_Call(ctx->func, PyTuple_New(0), NULL); //run the callable
-        
-		if (!ret) { //handle exception
-			PyObject *e;
-			PyObject *val;
-			PyObject *tb;
-			PyErr_Fetch(&e, &val, &tb);
-			if (PyErr_GivenExceptionMatches(e, PyExc_SystemExit)) {
-				// extract exit code
-				if (PyInt_Check(val))
-					exit(PyInt_AsLong(val));
-				else
-					exit(2);
-			}
-			// error
-			exit(1);
-		}
-		exit(0);
-	}
-
-	// parent process
-	while (!got_sig) ; //wait for the signal from child
-	kill(pid, SIGUSR1); //send a confirmation
-	waitpid(pid, NULL, 0); // ??
-
-	setup_kid(pid);
-	ptrace(PTRACE_SYSCALL, pid, 0, (void *) SIGUSR1);
-
-	return core_trace_loop(ctx, pid);
-}
+static char doc_catbox[] = "Simple and fast sandboxing module.";
+static char doc_run[] = "Run given function in a sandbox.\n"
+"\n"
+"    function: Python callable, will run inside the sandbox as a child\n"
+"              process. It can read all Python variables, but can't modify\n"
+"              caller's values.\n"
+"    writable_paths: A list of allowed paths.\n"
+"    network: Give a false value for disabling network communication.\n"
+"    logger: Another callable, will be called with operation, path, resolved path\n"
+"            arguments for each sandbox violation.\n"
+"\n"
+"    Everything except function are optional. Return value is an object\n"
+"    with two attributes:\n"
+"\n"
+"    code: Exit code of the child process.\n"
+"    violations: List of violation records.";
+static char doc_canonical[] = "Resolve and simplify given path.\n"
+"\n"
+"    path: Path string.\n"
+"    follow: Boolean, should we follow latest part of the path if it is\n"
+"            a symlink, default is no.\n"
+"    pid: Resolve path in the context of the process with given pid.\n"
+"         Relative paths and /proc/self are resolved for that process.\n"
+"\n"
+"    Everything except path are optional. Return value is the resolved\n"
+"    path string.";
 
 static PyObject *
 catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 {
 	static char *kwlist[] = {
 		"function",
-        "ret_object",
 		"writable_paths",
+		"network",
 		"logger",
+		"args",
 		NULL
 	};
- 	PyObject *ret;
+	PyObject *ret;
 	PyObject *paths = NULL;
+	PyObject *net = NULL;
 	struct trace_context ctx;
+	struct traced_child *child, *temp;
+	int i;
 
 	memset(&ctx, 0, sizeof(struct trace_context));
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|OO", kwlist, &ctx.func, &ctx.ret_object, &paths, &ctx.log_func))
-		return NULL;
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOO",
+		kwlist, &ctx.func, &paths, &net, &ctx.logger, &ctx.func_args))
+			return NULL;
 
 	if (PyCallable_Check(ctx.func) == 0) {
 		PyErr_SetString(PyExc_TypeError, "First argument should be a callable function");
 		return NULL;
 	}
 
-	if (ctx.log_func != Py_None && !PyCallable_Check(ctx.log_func)) {
+	if (ctx.logger && PyCallable_Check(ctx.logger) == 0) {
 		PyErr_SetString(PyExc_TypeError, "Logger should be a callable function");
 		return NULL;
 	}
@@ -108,25 +80,75 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		if (!ctx.pathlist) return NULL;
 	}
 
-	ret = do_run(&ctx);
+	if (net == NULL || PyObject_IsTrue(net))
+		ctx.network_allowed = 1;
+	else
+		ctx.network_allowed = 0;
+
+	catbox_retval_init(&ctx);
+
+	// setup is complete, run sandbox
+	ret = catbox_core_run(&ctx);
+
 	if (ctx.pathlist) {
 		free_pathlist(ctx.pathlist);
 	}
 
- 	return ret;
+	for (i = 0; i < PID_TABLE_SIZE; i++) {
+		temp = NULL;
+		for (child = ctx.children[i]; child; child = temp) {
+			temp = child->next;
+			free(child);
+		}
+	}
+
+	return ret;
 }
 
+static PyObject *
+catbox_canonical(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+	static char *kwlist[] = {
+		"path",
+		"follow",
+		"pid",
+		NULL
+	};
+	char *path;
+	char *canonical;
+	PyObject *follow = NULL;
+	int dont_follow = 0;
+	pid_t pid = -1;
+	PyObject *ret;
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s|Oi", kwlist, &path, &follow, &pid))
+		return NULL;
+
+	if (follow && !PyObject_IsTrue(follow))
+		dont_follow = 1;
+
+	if (pid == -1)
+		pid = getpid();
+
+	canonical = catbox_paths_canonical(pid, path, dont_follow);
+	if (!canonical) {
+		return NULL;
+	}
+
+	ret = PyString_FromString(canonical);
+	return ret;
+}
 
 static PyMethodDef methods[] = {
-    { "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS,
-      "Run given function in a sandbox."},
+	{ "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS, doc_run },
+	{ "canonical", (PyCFunction) catbox_canonical, METH_VARARGS | METH_KEYWORDS, doc_canonical },
 	{ NULL, NULL, 0, NULL }
 };
 
 PyMODINIT_FUNC
-initcatbox_int(void)
+initcatbox(void)
 {
 	PyObject *m;
 
-	m = Py_InitModule("catbox_int", methods);
+	m = Py_InitModule3("catbox", methods, doc_catbox);
 }
