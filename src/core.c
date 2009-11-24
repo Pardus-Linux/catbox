@@ -304,7 +304,7 @@ catbox_core_run(struct trace_context *ctx)
 			}
 			// Callable exits by unhandled exception
 			// So let child print error and value to stderr
-//			PyErr_Display( e,val,tb );
+			PyErr_Display( e,val,tb );
 			/*
 			 * FIXME: In a perfect world following works better
 			 * but pisi.api.cleanup didn't like what i want - caglar

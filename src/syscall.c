@@ -78,18 +78,16 @@ static struct syscall_def {
 // Architecture dependent register offsets
 #ifndef __i386__
 // x64
-#define orig_eax orig_rax
-#define eax rax
-#define R_ARG1 112
-#define R_ARG2 104
-#define R_CALL 120
-#define R_ERROR 80
+#define REG_ARG1 112
+#define REG_ARG2 104
+#define REG_CALL orig_rax
+#define REG_ERROR rax
 #else
 // i386
-#define R_ARG1 0
-#define R_ARG2 4
-#define R_CALL 44
-#define R_ERROR 24
+#define REG_ARG1 0
+#define REG_ARG2 4
+#define REG_CALL orig_eax
+#define REG_ERROR eax
 #endif
 
 static char *
@@ -131,7 +129,7 @@ path_arg_writable(struct trace_context *ctx, pid_t pid, char *path, const char *
 				// Special case for kernel build
 				unsigned int flags;
 				struct stat st;
-				flags = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
+				flags = ptrace(PTRACE_PEEKUSER, pid, REG_ARG2, 0);
 				if ((flags & O_CREAT) == 0 && stat(canonical, &st) == -1 && errno == ENOENT) {
 					free(canonical);
 					return ENOENT;
@@ -175,10 +173,10 @@ found:
 	name = system_calls[i].name;
 
 	if (flags & CHECK_PATH) {
-		arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG1, 0);
+		arg = ptrace(PTRACE_PEEKUSER, pid, REG_ARG1, 0);
 		path = get_str(pid, arg);
 		if (flags & OPEN_MODE) {
-			flags = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
+			flags = ptrace(PTRACE_PEEKUSER, pid, REG_ARG2, 0);
 			if (!(flags & O_WRONLY || flags & O_RDWR)) return 0;
 		}
 		ret = path_arg_writable(ctx, pid, path, name, flags & DONT_FOLLOW);
@@ -186,7 +184,7 @@ found:
 	}
 
 	if (flags & CHECK_PATH2) {
-		arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
+		arg = ptrace(PTRACE_PEEKUSER, pid, REG_ARG2, 0);
 		path = get_str(pid, arg);
 		ret = path_arg_writable(ctx, pid, path, name, flags & DONT_FOLLOW);
 		if (ret) return ret;
@@ -234,17 +232,15 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 
 	pid = kid->pid;
 	ptrace(PTRACE_GETREGS, pid, 0, &regs);
-	syscall = regs.orig_eax;
+	syscall = regs.REG_CALL;
 
 	if (kid->in_syscall) {
 		// returning from syscall
 		if (syscall == 0xbadca11) {
 			// restore real call number, and return our error code
-//			ptrace(PTRACE_POKEUSER, pid, R_CALL, kid->orig_call);
-//			ptrace(PTRACE_POKEUSER, pid, R_ERROR, kid->error_code);
-regs.eax = kid->error_code;
-regs.orig_eax = kid->orig_call;
-ptrace(PTRACE_SETREGS, pid, 0, &regs);
+			regs.REG_ERROR = kid->error_code;
+			regs.REG_CALL = kid->orig_call;
+			ptrace(PTRACE_SETREGS, pid, 0, &regs);
 		}
 		kid->in_syscall = 0;
 	} else {
@@ -259,9 +255,10 @@ ptrace(PTRACE_SETREGS, pid, 0, &regs);
 		int ret = handle_syscall(ctx, pid, syscall);
 		if (ret != 0) {
 			kid->error_code = ret;
-			kid->orig_call = regs.orig_eax;
+			kid->orig_call = regs.REG_CALL;
 			// prevent the call by giving an invalid call number
-			ptrace(PTRACE_POKEUSER, pid, R_CALL, 0xbadca11);
+			regs.REG_CALL = 0xbadca11;
+			ptrace(PTRACE_SETREGS, pid, 0, &regs);
 		}
 		kid->in_syscall = 1;
 	}

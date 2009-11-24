@@ -37,4 +37,5 @@ assert(ret.violations == [])
 
 ret = catbox.run(bad_op, writable_paths=[os.getcwd()])
 assert(ret.code == 1)
-assert(map(lambda x: x[0], ret.violations) == ["open", "chown32", "symlink"])
+vio = [x[0] for x in ret.violations]
+assert(vio == ["open", "chown32", "symlink"] or vio == ["open", "chown", "symlink"])
