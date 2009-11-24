@@ -174,6 +174,15 @@ found:
 	flags = system_calls[i].flags;
 	name = system_calls[i].name;
 
+if (strcmp(name, "open") == 0) {
+	printf("Syscall: open\n");
+	arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG1, 0);
+	path = get_str(pid, arg);
+	printf("Syscall arg1: [%s]\n", path);
+	arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
+	printf("Syscall arg2: [%ld]\n", arg);
+}
+
 	if (flags & CHECK_PATH) {
 		arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG1, 0);
 		path = get_str(pid, arg);
