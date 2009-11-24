@@ -33,7 +33,7 @@ static struct syscall_def {
 	{ __NR_open,       "open",       CHECK_PATH | OPEN_MODE },
 	{ __NR_creat,      "creat",      CHECK_PATH },
 	{ __NR_truncate,   "truncate",   CHECK_PATH },
-#ifndef __X86_64__
+#ifdef __i386__
 	{ __NR_truncate64, "truncate64", CHECK_PATH },
 #endif
 	{ __NR_unlink,     "unlink",     CHECK_PATH | DONT_FOLLOW },
@@ -44,14 +44,14 @@ static struct syscall_def {
 	{ __NR_chmod,      "chmod",      CHECK_PATH | LOG_MODE },
 	{ __NR_lchown,     "lchown",     CHECK_PATH | LOG_MODE | DONT_FOLLOW },
 	{ __NR_chown,      "chown",      CHECK_PATH | LOG_OWNER },
-#ifndef __X86_64__
+#ifdef __i386__
 	{ __NR_lchown32,   "lchown32",   CHECK_PATH | LOG_OWNER | DONT_FOLLOW },
 	{ __NR_chown32,    "chown32",    CHECK_PATH | LOG_OWNER },
 #endif
 	{ __NR_mkdir,      "mkdir",      CHECK_PATH },
 	{ __NR_rmdir,      "rmdir",      CHECK_PATH },
 	{ __NR_mount,      "mount",      CHECK_PATH },
-#ifdef __X86_64__
+#ifndef __i386__
 	{ __NR_umount2,    "umount",     CHECK_PATH },
 #else
 	{ __NR_umount,     "umount",     CHECK_PATH },
@@ -61,13 +61,13 @@ static struct syscall_def {
 	{ __NR_geteuid,    "geteuid",    FAKE_ID },
 	{ __NR_getgid,     "getgid",     FAKE_ID },
 	{ __NR_getegid,    "getegid",    FAKE_ID },
-#ifndef __X86_64__
+#ifdef __i386__
 	{ __NR_getuid32,   "getuid32",   FAKE_ID },
 	{ __NR_geteuid32,  "geteuid32",  FAKE_ID },
 	{ __NR_getgid32,   "getgid32",   FAKE_ID },
 	{ __NR_getegid32,  "getegid32",  FAKE_ID },
 #endif
-#ifdef __X86_64__
+#ifndef __i386__
 	{ __NR_socket,     "socketcall", NET_CALL },
 #else
 	{ __NR_socketcall, "socketcall", NET_CALL },
@@ -75,8 +75,8 @@ static struct syscall_def {
 	{ 0, NULL, 0 }
 };
 
-// Architecture dependant register offsets
-#ifdef __X86_64__
+// Architecture dependent register offsets
+#ifndef __i386__
 // x64
 #define orig_eax orig_rax
 #define eax rax
