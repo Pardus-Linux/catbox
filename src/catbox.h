@@ -26,7 +26,7 @@ struct traced_child {
 	/* kid called execve, and we'll get spurious sigtrap in next wait */
 	int in_execve;
 	/* original syscall number when a syscall is faked */
-	unsigned long orig_eax;
+	unsigned long orig_call;
 	/* faked syscall will fail with this error code */
 	int error_code;
 	/* used for hash table collision handling */

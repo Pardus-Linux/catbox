@@ -33,7 +33,9 @@ static struct syscall_def {
 	{ __NR_open,       "open",       CHECK_PATH | OPEN_MODE },
 	{ __NR_creat,      "creat",      CHECK_PATH },
 	{ __NR_truncate,   "truncate",   CHECK_PATH },
+#ifndef __X86_64__
 	{ __NR_truncate64, "truncate64", CHECK_PATH },
+#endif
 	{ __NR_unlink,     "unlink",     CHECK_PATH | DONT_FOLLOW },
 	{ __NR_link,       "link",       CHECK_PATH | CHECK_PATH2 },
 	{ __NR_symlink,    "symlink",    CHECK_PATH2 | DONT_FOLLOW },
@@ -42,24 +44,53 @@ static struct syscall_def {
 	{ __NR_chmod,      "chmod",      CHECK_PATH | LOG_MODE },
 	{ __NR_lchown,     "lchown",     CHECK_PATH | LOG_MODE | DONT_FOLLOW },
 	{ __NR_chown,      "chown",      CHECK_PATH | LOG_OWNER },
+#ifndef __X86_64__
 	{ __NR_lchown32,   "lchown32",   CHECK_PATH | LOG_OWNER | DONT_FOLLOW },
 	{ __NR_chown32,    "chown32",    CHECK_PATH | LOG_OWNER },
+#endif
 	{ __NR_mkdir,      "mkdir",      CHECK_PATH },
 	{ __NR_rmdir,      "rmdir",      CHECK_PATH },
 	{ __NR_mount,      "mount",      CHECK_PATH },
+#ifdef __X86_64__
+	{ __NR_umount2,    "umount",     CHECK_PATH },
+#else
 	{ __NR_umount,     "umount",     CHECK_PATH },
+#endif
 	{ __NR_utime,      "utime",      CHECK_PATH },
 	{ __NR_getuid,     "getuid",     FAKE_ID },
-	{ __NR_getuid32,   "getuid32",   FAKE_ID },
 	{ __NR_geteuid,    "geteuid",    FAKE_ID },
-	{ __NR_geteuid32,  "geteuid32",  FAKE_ID },
 	{ __NR_getgid,     "getgid",     FAKE_ID },
-	{ __NR_getgid32,   "getgid32",   FAKE_ID },
 	{ __NR_getegid,    "getegid",    FAKE_ID },
+#ifndef __X86_64__
+	{ __NR_getuid32,   "getuid32",   FAKE_ID },
+	{ __NR_geteuid32,  "geteuid32",  FAKE_ID },
+	{ __NR_getgid32,   "getgid32",   FAKE_ID },
 	{ __NR_getegid32,  "getegid32",  FAKE_ID },
+#endif
+#ifdef __X86_64__
+	{ __NR_socket,     "socketcall", NET_CALL },
+#else
 	{ __NR_socketcall, "socketcall", NET_CALL },
+#endif
 	{ 0, NULL, 0 }
 };
+
+// Architecture dependant register offsets
+#ifdef __X86_64__
+// x64
+#define orig_eax orig_rax
+#define eax rax
+#define R_ARG1 48
+#define R_ARG2 56
+#define R_CALL 120
+#define R_ERROR 80
+#else
+// i386
+#define R_ARG1 0
+#define R_ARG2 4
+#define R_CALL 44
+#define R_ERROR 24
+#endif
 
 static char *
 get_str(pid_t pid, unsigned long ptr)
@@ -100,7 +131,7 @@ path_arg_writable(struct trace_context *ctx, pid_t pid, char *path, const char *
 				// Special case for kernel build
 				unsigned int flags;
 				struct stat st;
-				flags = ptrace(PTRACE_PEEKUSER, pid, 4, 0);
+				flags = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
 				if ((flags & O_CREAT) == 0 && stat(canonical, &st) == -1 && errno == ENOENT) {
 					free(canonical);
 					return ENOENT;
@@ -144,10 +175,10 @@ found:
 	name = system_calls[i].name;
 
 	if (flags & CHECK_PATH) {
-		arg = ptrace(PTRACE_PEEKUSER, pid, 0, 0);
+		arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG1, 0);
 		path = get_str(pid, arg);
 		if (flags & OPEN_MODE) {
-			flags = ptrace(PTRACE_PEEKUSER, pid, 4, 0);
+			flags = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
 			if (!(flags & O_WRONLY || flags & O_RDWR)) return 0;
 		}
 		ret = path_arg_writable(ctx, pid, path, name, flags & DONT_FOLLOW);
@@ -155,7 +186,7 @@ found:
 	}
 
 	if (flags & CHECK_PATH2) {
-		arg = ptrace(PTRACE_PEEKUSER, pid, 4, 0);
+		arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
 		path = get_str(pid, arg);
 		ret = path_arg_writable(ctx, pid, path, name, flags & DONT_FOLLOW);
 		if (ret) return ret;
@@ -209,8 +240,8 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 		// returning from syscall
 		if (syscall == 0xbadca11) {
 			// restore real call number, and return our error code
-			ptrace(PTRACE_POKEUSER, pid, 44, kid->orig_eax);
-			ptrace(PTRACE_POKEUSER, pid, 24, kid->error_code);
+			ptrace(PTRACE_POKEUSER, pid, R_CALL, kid->orig_call);
+			ptrace(PTRACE_POKEUSER, pid, R_ERROR, kid->error_code);
 		}
 		kid->in_syscall = 0;
 	} else {
@@ -225,9 +256,9 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 		int ret = handle_syscall(ctx, pid, syscall);
 		if (ret != 0) {
 			kid->error_code = ret;
-			kid->orig_eax = regs.orig_eax;
+			kid->orig_call = regs.orig_eax;
 			// prevent the call by giving an invalid call number
-			ptrace(PTRACE_POKEUSER, pid, 44, 0xbadca11);
+			ptrace(PTRACE_POKEUSER, pid, R_CALL, 0xbadca11);
 		}
 		kid->in_syscall = 1;
 	}
