@@ -100,7 +100,7 @@ get_str(pid_t pid, unsigned long ptr)
 	static char buf2[5120];
 	int i = 0;
 	int f;
-
+buf2[0] ='\0';
 	sprintf(buf1, "/proc/%d/mem", pid);
 	f = open(buf1, O_RDONLY);
 	lseek(f, ptr, 0);
@@ -175,12 +175,13 @@ found:
 	name = system_calls[i].name;
 
 if (strcmp(name, "open") == 0) {
+	int i;
 	printf("Syscall: open\n");
-	arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG1, 0);
-	path = get_str(pid, arg);
-	printf("Syscall arg1: [%s]\n", path);
-	arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
-	printf("Syscall arg2: [%ld]\n", arg);
+	for (i=0;i<15;i++) {
+		arg = ptrace(PTRACE_PEEKUSER, pid, i*8, 0);
+		path = get_str(pid, arg);
+		printf("Syscall arg%d: %ld [%s]\n", i, arg, path);
+	}
 }
 
 	if (flags & CHECK_PATH) {
