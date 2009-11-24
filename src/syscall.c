@@ -79,11 +79,10 @@ static struct syscall_def {
 #ifndef __i386__
 // x64
 #define orig_eax orig_rax
-#define eax rax
 #define R_ARG1 112
 #define R_ARG2 104
 #define R_CALL 120
-#define R_ERROR 104
+#define R_ERROR 80
 #else
 // i386
 #define R_ARG1 0
