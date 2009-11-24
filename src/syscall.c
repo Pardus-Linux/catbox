@@ -80,8 +80,8 @@ static struct syscall_def {
 // x64
 #define orig_eax orig_rax
 #define eax rax
-#define R_ARG1 48
-#define R_ARG2 56
+#define R_ARG1 112
+#define R_ARG2 104
 #define R_CALL 120
 #define R_ERROR 80
 #else
@@ -177,11 +177,10 @@ found:
 if (strcmp(name, "open") == 0) {
 	int i;
 	printf("Syscall: open\n");
-	for (i=0;i<15;i++) {
-		arg = ptrace(PTRACE_PEEKUSER, pid, i*8, 0);
-		path = get_str(pid, arg);
-		printf("Syscall arg%d: %ld [%s]\n", i, arg, path);
-	}
+	arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG1, 0);
+	path = get_str(pid, arg);
+	arg = ptrace(PTRACE_PEEKUSER, pid, R_ARG2, 0);
+	printf("Syscall args: [%s] [%lu]\n", path, arg);
 }
 
 	if (flags & CHECK_PATH) {
