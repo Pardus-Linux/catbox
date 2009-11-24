@@ -79,6 +79,7 @@ static struct syscall_def {
 #ifndef __i386__
 // x64
 #define orig_eax orig_rax
+#define eax rax
 #define R_ARG1 112
 #define R_ARG2 104
 #define R_CALL 120
@@ -239,8 +240,11 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 		// returning from syscall
 		if (syscall == 0xbadca11) {
 			// restore real call number, and return our error code
-			ptrace(PTRACE_POKEUSER, pid, R_CALL, kid->orig_call);
-			ptrace(PTRACE_POKEUSER, pid, R_ERROR, kid->error_code);
+//			ptrace(PTRACE_POKEUSER, pid, R_CALL, kid->orig_call);
+//			ptrace(PTRACE_POKEUSER, pid, R_ERROR, kid->error_code);
+regs.eax = kid->error_code;
+regs.orig_eax = kid->orig_call;
+ptrace(PTRACE_SETREGS, pid, 0, &regs);
 		}
 		kid->in_syscall = 0;
 	} else {
