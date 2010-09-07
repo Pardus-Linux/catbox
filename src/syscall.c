@@ -13,6 +13,7 @@
 #include <sys/user.h>
 #include <linux/unistd.h>
 #include <fcntl.h>
+#include <stddef.h>
 
 // System call dispatch flags
 #define CHECK_PATH    1 << 0  // First argument should be a valid path
@@ -93,22 +94,25 @@ static struct syscall_def {
 };
 
 // Architecture dependent register offsets
+
+#define OFFSET_OF_REG(x) offsetof(struct user_regs_struct, x)
+
 #ifndef __i386__
 // x64
-#define REG_ARG1 112
-#define REG_ARG2 104
-#define REG_ARG3 96
-#define REG_ARG4 56
-#define REG_ARG5 80
+#define REG_ARG1 OFFSET_OF_REG(rdi)
+#define REG_ARG2 OFFSET_OF_REG(rsi)
+#define REG_ARG3 OFFSET_OF_REG(rdx)
+#define REG_ARG4 OFFSET_OF_REG(r10)
+#define REG_ARG5 OFFSET_OF_REG(r8)
 #define REG_CALL orig_rax
 #define REG_ERROR rax
 #else
 // i386
-#define REG_ARG1 0
-#define REG_ARG2 4
-#define REG_ARG3 8  //edx
-#define REG_ARG4 12 //esi
-#define REG_ARG5 16 //edi
+#define REG_ARG1 OFFSET_OF_REG(ebx)
+#define REG_ARG2 OFFSET_OF_REG(ecx)
+#define REG_ARG3 OFFSET_OF_REG(edx)
+#define REG_ARG4 OFFSET_OF_REG(esi)
+#define REG_ARG5 OFFSET_OF_REG(edi)
 #define REG_CALL orig_eax
 #define REG_ERROR eax
 #endif
