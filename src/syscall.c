@@ -98,7 +98,7 @@ static struct syscall_def {
 #define REG_ARG1 112
 #define REG_ARG2 104
 #define REG_ARG3 96
-#define REG_ARG4 88
+#define REG_ARG4 56
 #define REG_ARG5 80
 #define REG_CALL orig_rax
 #define REG_ERROR rax
