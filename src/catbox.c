@@ -48,7 +48,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		"function",
 		"writable_paths",
 		"network",
-                "collect_only",
+		"collect_only",
 		"logger",
 		"args",
 		NULL
