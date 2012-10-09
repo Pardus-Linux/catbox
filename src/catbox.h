@@ -49,6 +49,8 @@ struct trace_context {
 	char **pathlist;
 	/* is network connection allowed */
 	int network_allowed;
+	/* collect violations only or block syscall violations */
+	int collect_only;
 	/* per process data table, hashed by process id */
 	unsigned int nr_children;
 	struct traced_child *children[PID_TABLE_SIZE];
