@@ -373,9 +373,11 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 		if (ret != 0) {
 			kid->error_code = ret;
 			kid->orig_call = regs.REG_CALL;
-			// prevent the call by giving an invalid call number
-			regs.REG_CALL = 0xbadca11;
-			ptrace(PTRACE_SETREGS, pid, 0, &regs);
+			if (!ctx->collect_only) {
+				// prevent the call by giving an invalid call number
+				regs.REG_CALL = 0xbadca11;
+				ptrace(PTRACE_SETREGS, pid, 0, &regs);
+			}
 		}
 		kid->in_syscall = 1;
 	}

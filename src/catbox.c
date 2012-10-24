@@ -48,6 +48,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		"function",
 		"writable_paths",
 		"network",
+		"collect_only",
 		"logger",
 		"args",
 		NULL
@@ -55,14 +56,15 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 	PyObject *ret;
 	PyObject *paths = NULL;
 	PyObject *net = NULL;
+	PyObject *collect_only = NULL;
 	struct trace_context ctx;
 	struct traced_child *child, *temp;
 	int i;
 
 	memset(&ctx, 0, sizeof(struct trace_context));
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOO",
-		kwlist, &ctx.func, &paths, &net, &ctx.logger, &ctx.func_args))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOO",
+		kwlist, &ctx.func, &paths, &net, &collect_only, &ctx.logger, &ctx.func_args))
 			return NULL;
 
 	if (PyCallable_Check(ctx.func) == 0) {
@@ -84,6 +86,11 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		ctx.network_allowed = 1;
 	else
 		ctx.network_allowed = 0;
+
+	if (collect_only && PyObject_IsTrue(collect_only))
+		ctx.collect_only = 1;
+	else
+		ctx.collect_only = 0;
 
 	catbox_retval_init(&ctx);
 
