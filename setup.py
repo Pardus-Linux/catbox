@@ -71,6 +71,7 @@ source = [
 setup(
     name='catbox',
     version=version,
+    scripts=['bin/catbox'],
     ext_modules=[Extension('catbox', source, extra_compile_args=["-Wall"])],
     cmdclass = {
         'install' : Install
