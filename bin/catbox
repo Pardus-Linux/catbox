@@ -1,0 +1,66 @@
+#!/usr/bin/python
+
+import argparse
+import subprocess
+import sys
+
+import catbox
+
+
+def run(cmd):
+    return subprocess.call(cmd, shell=True)
+
+def logger(operation, path, resolved_path):
+    sys.stderr.write("Violation: %s %s\n" % (operation, resolved_path))
+
+def main():
+    parser = argparse.ArgumentParser(description='Catbox.')
+    parser.add_argument(
+        'cmds',
+        metavar='commands',
+        type=str,
+        nargs='+',
+        help='a list of commands to run in catbox'
+    )
+    parser.add_argument(
+        '-n',
+        '--network',
+        action='store_true',
+        help='allow network communication'
+    )
+    parser.add_argument(
+        '-p',
+        '--path',
+        dest='paths',
+        metavar='writeable_paths',
+        default=[],
+        type=str,
+        nargs='*',
+        help='a list of allowed/writeable paths'
+    )
+    parser.add_argument(
+        '--collect-only',
+        dest='collect_only',
+        action='store_true',
+        help='collect all violations or exit at first violation'
+    )
+
+    args = parser.parse_args()
+    exit_val = 0
+    for cmd in args.cmds:
+        ret = catbox.run(
+            run,
+            args.paths,
+            args.network,
+            args.collect_only,
+            logger,
+            (cmd,)
+        )
+
+        if ret.violations:
+            exit_val = 1
+
+    sys.exit(exit_val)
+
+if __name__ == "__main__":
+    main()
