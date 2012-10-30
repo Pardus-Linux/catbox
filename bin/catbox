@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import argparse
+import optparse
 import subprocess
 import sys
 
@@ -14,45 +14,39 @@ def logger(operation, path, resolved_path):
     sys.stderr.write("Violation: %s %s\n" % (operation, resolved_path))
 
 def main():
-    parser = argparse.ArgumentParser(description='Catbox.')
-    parser.add_argument(
-        'cmds',
-        metavar='commands',
-        type=str,
-        nargs='+',
-        help='a list of commands to run in catbox'
+    parser = optparse.OptionParser(
+        description='Catbox, Python sandboxing library.',
+        usage='usage: %prog [options] "command [arguments]"'
     )
-    parser.add_argument(
+    parser.add_option(
         '-n',
         '--network',
         action='store_true',
         help='allow network communication'
     )
-    parser.add_argument(
+    parser.add_option(
         '-p',
         '--path',
         dest='paths',
-        metavar='writeable_paths',
         default=[],
-        type=str,
-        nargs='*',
+        action='append',
         help='a list of allowed/writeable paths'
     )
-    parser.add_argument(
+    parser.add_option(
         '--collect-only',
         dest='collect_only',
         action='store_true',
         help='collect all violations or exit at first violation'
     )
 
-    args = parser.parse_args()
+    opts, args = parser.parse_args()
     exit_val = 0
-    for cmd in args.cmds:
+    for cmd in args:
         ret = catbox.run(
             run,
-            args.paths,
-            args.network,
-            args.collect_only,
+            opts.paths,
+            opts.network,
+            opts.collect_only,
             logger,
             (cmd,)
         )
