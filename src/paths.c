@@ -206,6 +206,12 @@ make_pathlist(PyObject *paths)
 			free_pathlist(pathlist);
 			return NULL;
 		}
+                if (str[0] != '/' && str[0] != '~') {
+                        Py_DECREF(item);
+                        free_pathlist(pathlist);
+                        PyErr_SetString(PyExc_TypeError, "paths should be absolute or prefixed with '~' for regexp processing");
+                        return NULL;
+                }
 		pathlist[i] = strdup(str);
 		Py_DECREF(item);
 		if (!pathlist[i]) {
