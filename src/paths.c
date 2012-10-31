@@ -7,11 +7,36 @@
 ** option) any later version. Please read the COPYING file.
 */
 
-#include <Python.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include <Python.h>
+#include <pcre.h>
+
+static int
+match_re_path(const char *regex, const char *path)
+{
+	pcre *re;
+	int rc;
+	const char *error;
+	int erroffset;
+	re = pcre_compile (regex, 0, &error, &erroffset, 0);
+	if (!re) {
+		printf("ERROR: pcre_compile failed for regex (%s) (offset: %d), %s\n", regex, erroffset, error);
+		return 0;
+	}
+
+	int ovector[100];
+	unsigned int len = strlen(path);
+	rc = pcre_exec(re, 0, path, len, 0, 0, ovector, sizeof(ovector));
+	free(re);
+	if (rc < 0) {
+		return 0;
+	}
+	return 1;
+}
 
 static char *
 get_cwd(pid_t pid)
@@ -127,9 +152,12 @@ path_writable(char **pathlist, const char *canonical, int mkdir_case)
 	if (!pathlist) return 0;
 
 	for (i = 0; pathlist[i]; i++) {
-		size_t size = strlen(pathlist[i]);
-		if (pathlist[i][size-1] == '/' && strlen(canonical) == (size - 1)) --size;
-		if (strncmp(pathlist[i], canonical, size) == 0) {
+		char *path = pathlist[i];
+		size_t size = strlen(path);
+		if (path[size-1] == '/' && strlen(canonical) == (size - 1)) --size;
+		if (path[0] == '~') {
+			return match_re_path(++path, canonical);
+		} else if (strncmp(pathlist[i], canonical, size) == 0) {
 			return 1;
 		} else if (mkdir_case && strncmp(pathlist[i], canonical, strlen(canonical)) == 0) {
 			return -1;
@@ -176,12 +204,6 @@ make_pathlist(PyObject *paths)
 		if (!str) {
 			Py_DECREF(item);
 			free_pathlist(pathlist);
-			return NULL;
-		}
-		if (str[0] != '/') {
-			Py_DECREF(item);
-			free_pathlist(pathlist);
-			PyErr_SetString(PyExc_TypeError, "paths should be absolute");
 			return NULL;
 		}
 		pathlist[i] = strdup(str);

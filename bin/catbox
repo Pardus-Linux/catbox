@@ -30,7 +30,8 @@ def main():
         dest='paths',
         default=[],
         action='append',
-        help='a list of allowed/writeable paths'
+        help='''a list of allowed/writeable paths. paths starting with '~'
+ will be treated as regular expressions (using PCRE)'''
     )
     parser.add_option(
         '--collect-only',
