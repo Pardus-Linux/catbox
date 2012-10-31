@@ -13,8 +13,9 @@
 #include <unistd.h>
 
 #include <Python.h>
-#include <pcre.h>
 
+#ifdef ENABLE_PCRE
+#include <pcre.h>
 static int
 match_re_path(const char *regex, const char *path)
 {
@@ -37,6 +38,7 @@ match_re_path(const char *regex, const char *path)
 	}
 	return 1;
 }
+#endif
 
 static char *
 get_cwd(pid_t pid)
@@ -155,9 +157,12 @@ path_writable(char **pathlist, const char *canonical, int mkdir_case)
 		char *path = pathlist[i];
 		size_t size = strlen(path);
 		if (path[size-1] == '/' && strlen(canonical) == (size - 1)) --size;
+#ifdef ENABLE_PCRE
 		if (path[0] == '~') {
 			return match_re_path(++path, canonical);
-		} else if (strncmp(pathlist[i], canonical, size) == 0) {
+		} else
+#endif
+                if (strncmp(pathlist[i], canonical, size) == 0) {
 			return 1;
 		} else if (mkdir_case && strncmp(pathlist[i], canonical, strlen(canonical)) == 0) {
 			return -1;
@@ -206,10 +211,16 @@ make_pathlist(PyObject *paths)
 			free_pathlist(pathlist);
 			return NULL;
 		}
+#ifdef ENABLE_PCRE
                 if (str[0] != '/' && str[0] != '~') {
+                        const char *errmsg = "paths should be absolute or prefixed with '~' for regexp processing";
+#else
+                if (str[0] != '/') {
+                        const char *errmsg = "paths should be absolute";
+#endif
                         Py_DECREF(item);
                         free_pathlist(pathlist);
-                        PyErr_SetString(PyExc_TypeError, "paths should be absolute or prefixed with '~' for regexp processing");
+                        PyErr_SetString(PyExc_TypeError, errmsg);
                         return NULL;
                 }
 		pathlist[i] = strdup(str);

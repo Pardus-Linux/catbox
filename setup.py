@@ -28,6 +28,8 @@ distfiles = """
     tests/*.py
 """
 
+enable_pcre = True if os.getenv('ENABLE_PCRE') else False
+print enable_pcre, "PCRE"*10
 if 'dist' in sys.argv:
     distdir = "catbox-%s" % version
     list = []
@@ -48,7 +50,6 @@ if 'dist' in sys.argv:
     shutil.rmtree(distdir)
     sys.exit(0)
 
-
 class Install(install):
     def finalize_options(self):
         # NOTE: for Pardus distribution
@@ -68,11 +69,23 @@ source = [
     'src/retval.c',
 ]
 
+libraries = ["pcre"] if enable_pcre else []
+extra_compile_args=["-Wall"]
+if enable_pcre:
+    extra_compile_args.append("-DENABLE_PCRE")
+
 setup(
     name='catbox',
     version=version,
     scripts=['bin/catbox'],
-    ext_modules=[Extension('catbox', source, extra_compile_args=["-Wall"], libraries=["pcre"])],
+    ext_modules=[
+        Extension(
+            'catbox',
+            source,
+            extra_compile_args=extra_compile_args,
+            libraries=libraries,
+        )
+    ],
     cmdclass = {
         'install' : Install
     }

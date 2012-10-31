@@ -31,7 +31,7 @@ def main():
         default=[],
         action='append',
         help='''a list of allowed/writeable paths. paths starting with '~'
- will be treated as regular expressions (using PCRE)'''
+ will be treated as regular expressions (if compiled with ENABLE_PCRE)'''
     )
     parser.add_option(
         '--collect-only',
