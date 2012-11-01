@@ -29,7 +29,6 @@ distfiles = """
 """
 
 enable_pcre = True if os.getenv('ENABLE_PCRE') else False
-print enable_pcre, "PCRE"*10
 if 'dist' in sys.argv:
     distdir = "catbox-%s" % version
     list = []
