@@ -112,16 +112,3 @@ catbox_retval_add_violation(struct trace_context *ctx, const char *operation, co
 		PyObject_Call(ctx->logger, item, NULL);
 	}
 }
-
-void
-catbox_retval_add_exception(struct trace_context *ctx, PyObject *exception, PyObject *value, PyObject *traceback)
-{
-	RetVal *ret = (RetVal *) ctx->retval;
-	PyObject *item;
-
-	item = PyTuple_New(3);
-	PyTuple_SetItem(item, 0, exception);
-	PyTuple_SetItem(item, 1, value);
-	PyTuple_SetItem(item, 2, traceback);
-	PyList_Append(ret->exceptions, item);
-}

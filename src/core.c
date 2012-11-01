@@ -306,12 +306,6 @@ catbox_core_run(struct trace_context *ctx)
 			// Callable exits by unhandled exception
 			// So let child print error and value to stderr
 			PyErr_Display(e, val, tb);
-			
-			//TODO: Of course we can not do this here. Find a way to
-			//communicate exeption info back to the parent. Ideally we
-			//should do the same thing for exit values.
-			//
-			//catbox_retval_add_exception(ctx, e, val, tb);
 			exit(1);
 		}
 		// Callable exits by returning from function normally
