@@ -159,10 +159,12 @@ path_writable(char **pathlist, const char *canonical, int mkdir_case)
 		if (path[size-1] == '/' && strlen(canonical) == (size - 1)) --size;
 #ifdef ENABLE_PCRE
 		if (path[0] == '~') {
-			return match_re_path(++path, canonical);
+			if (match_re_path(++path, canonical) == 1) {
+				return 1;
+			}
 		} else
 #endif
-                if (strncmp(pathlist[i], canonical, size) == 0) {
+		if (strncmp(pathlist[i], canonical, size) == 0) {
 			return 1;
 		} else if (mkdir_case && strncmp(pathlist[i], canonical, strlen(canonical)) == 0) {
 			return -1;
