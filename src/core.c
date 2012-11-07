@@ -32,7 +32,9 @@ setup_kid(struct traced_child *kid)
 		| PTRACE_O_TRACEFORK
 		| PTRACE_O_TRACEVFORK
 	);
-	if (e != 0) printf("ptrace opts error %s\n",strerror(errno));
+	if (e != 0) {
+		printf("ptrace opts error for pid (%d): %s\n", kid->pid, strerror(errno));
+	}
 	kid->need_setup = 0;
 }
 
@@ -153,8 +155,8 @@ decide_event(struct trace_context *ctx, struct traced_child *kid, int status)
 			}
 			event = (status >> 16) & 0xffff;
 			if (event == PTRACE_EVENT_FORK
-			    || event == PTRACE_EVENT_VFORK
-			    || event == PTRACE_EVENT_CLONE) {
+				|| event == PTRACE_EVENT_VFORK
+				|| event == PTRACE_EVENT_CLONE) {
 				// 1.3.2. reason: Child made a fork
 				return E_FORK;
 			}
@@ -244,13 +246,25 @@ core_trace_loop(struct trace_context *ctx)
 				break;
 		}
 	}
-
 	catbox_retval_set_exit_code(ctx, retcode);
 	return ctx->retval;
 }
 
+static int child_pid = 0;
+
+static void sigterm(int sig) {
+	if (child_pid && sig == SIGTERM) {
+		kill(child_pid, SIGTERM);
+	}
+	exit(1);
+}
+
+static void sigint(int sig) {
+	raise(SIGTERM);
+}
+
 // Syncronization value, it has two copies in parent and child's memory spaces
-static int volatile got_sig = 0;
+static sig_atomic_t volatile got_sig = 0;
 
 static void sigusr1(int dummy) {
 	got_sig = 1;
@@ -304,27 +318,7 @@ catbox_core_run(struct trace_context *ctx)
 			}
 			// Callable exits by unhandled exception
 			// So let child print error and value to stderr
-			PyErr_Display( e,val,tb );
-			/*
-			 * FIXME: In a perfect world following works better
-			 * but pisi.api.cleanup didn't like what i want - caglar
-			PySys_SetObject("last_type", e);
-			PySys_SetObject("last_value", val);
-			PySys_SetObject("last_traceback", tb);
-			PyObject *hook = PySys_GetObject("excepthook");
-			if (hook) {
-				PyObject *args = PyTuple_Pack(3, e, val, tb);
-				PyObject *result = PyEval_CallObject(hook, args);
-				
-				// excepthook is a borrowed reference 
-				Py_XDECREF(result);
-				Py_XDECREF(args);
-				Py_XDECREF(tb);
-				Py_XDECREF(val);
-				Py_XDECREF(e);
-				PyErr_Clear();
-			}
-			*/
+			PyErr_Display(e, val, tb);
 			exit(1);
 		}
 		// Callable exits by returning from function normally
@@ -337,6 +331,13 @@ catbox_core_run(struct trace_context *ctx)
 	while (!got_sig);
 	// tell the kid that it can start given callable now
 	kill(pid, SIGUSR1);
+
+	// when we're interrupted child shouldn't continue on
+	// running. pass the signal on to child...
+	child_pid = pid;
+	signal(SIGINT, sigint);
+	signal(SIGTERM, sigterm);
+
 	waitpid(pid, NULL, 0);
 
 	kid = add_child(ctx, pid);

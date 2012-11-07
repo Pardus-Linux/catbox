@@ -20,10 +20,17 @@ static char doc_run[] = "Run given function in a sandbox.\n"
 "    function: Python callable, will run inside the sandbox as a child\n"
 "              process. It can read all Python variables, but can't modify\n"
 "              caller's values.\n"
+#ifdef ENABLE_PCRE
+"    writable_paths: A list of allowed paths. Path definitions starting\n"
+"                    with a '~' will be treated as regular expressions (PCRE)\n"
+#else
 "    writable_paths: A list of allowed paths.\n"
+#endif
 "    network: Give a false value for disabling network communication.\n"
 "    logger: Another callable, will be called with operation, path, resolved path\n"
 "            arguments for each sandbox violation.\n"
+"     collect_only: When set catbox collects all violations otherwise\n"
+"                   it'll exit after first violation.\n"
 "\n"
 "    Everything except function are optional. Return value is an object\n"
 "    with two attributes:\n"
