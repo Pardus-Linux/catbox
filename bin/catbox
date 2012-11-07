@@ -1,0 +1,61 @@
+#!/usr/bin/python
+
+import optparse
+import subprocess
+import sys
+
+import catbox
+
+
+def run(cmd):
+    return subprocess.call(cmd, shell=True)
+
+def logger(operation, path, resolved_path):
+    sys.stderr.write("Violation: %s %s\n" % (operation, resolved_path))
+
+def main():
+    parser = optparse.OptionParser(
+        description='Catbox, Python sandboxing library.',
+        usage='usage: %prog [options] "command [arguments]"'
+    )
+    parser.add_option(
+        '-n',
+        '--network',
+        action='store_true',
+        help='allow network communication'
+    )
+    parser.add_option(
+        '-p',
+        '--path',
+        dest='paths',
+        default=[],
+        action='append',
+        help='''a list of allowed/writeable paths. paths starting with '~'
+ will be treated as regular expressions (if compiled with ENABLE_PCRE)'''
+    )
+    parser.add_option(
+        '--collect-only',
+        dest='collect_only',
+        action='store_true',
+        help='collect all violations or exit at first violation'
+    )
+
+    opts, args = parser.parse_args()
+    exit_val = 0
+    for cmd in args:
+        ret = catbox.run(
+            run,
+            opts.paths,
+            opts.network,
+            opts.collect_only,
+            logger,
+            (cmd,)
+        )
+
+        if ret.violations:
+            exit_val = 1
+
+    sys.exit(exit_val)
+
+if __name__ == "__main__":
+    main()

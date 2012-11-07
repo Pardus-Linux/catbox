@@ -351,8 +351,7 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 	ptrace(PTRACE_GETREGS, pid, 0, &regs);
 	syscall = regs.REG_CALL;
 
-	if (kid->in_syscall) {
-		// returning from syscall
+	if (kid->in_syscall) { // returning from syscall
 		if (syscall == 0xbadca11) {
 			// restore real call number, and return our error code
 			regs.REG_ERROR = kid->error_code;
@@ -360,9 +359,7 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 			ptrace(PTRACE_SETREGS, pid, 0, &regs);
 		}
 		kid->in_syscall = 0;
-	} else {
-		// entering syscall
-
+	} else { // entering syscall
 		// skip extra sigtrap from execve call
 		if (syscall == __NR_execve) {
 			kid->in_execve = 1;
