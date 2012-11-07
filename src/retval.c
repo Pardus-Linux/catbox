@@ -14,13 +14,11 @@ typedef struct {
 	PyObject_HEAD
 	int code;
 	PyObject *violations;
-	PyObject *exceptions;
 } RetVal;
 
 static PyMemberDef members[] = {
 	{ "code", T_INT, offsetof(RetVal, code), 0, NULL },
 	{ "violations", T_OBJECT, offsetof(RetVal, violations), 0, NULL },
-	{ "exceptions", T_OBJECT, offsetof(RetVal, exceptions), 0, NULL },
 	{ NULL, 0, 0, 0, NULL }
 };
 
@@ -83,7 +81,6 @@ catbox_retval_init(struct trace_context *ctx)
 	ret = PyObject_New(RetVal, &RetVal_type);
 	ret->code = 0;
 	ret->violations = PyList_New(0);
-	ret->exceptions = PyList_New(0);
 	ctx->retval = (PyObject *) ret;
 	return 0;
 }
