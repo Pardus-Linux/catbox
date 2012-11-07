@@ -250,8 +250,21 @@ core_trace_loop(struct trace_context *ctx)
 	return ctx->retval;
 }
 
+static int child_pid = 0;
+
+static void sigterm(int sig) {
+	if (child_pid && sig == SIGTERM) {
+		kill(child_pid, SIGTERM);
+	}
+	exit(1);
+}
+
+static void sigint(int sig) {
+	raise(SIGTERM);
+}
+
 // Syncronization value, it has two copies in parent and child's memory spaces
-static int volatile got_sig = 0;
+static sig_atomic_t volatile got_sig = 0;
 
 static void sigusr1(int dummy) {
 	got_sig = 1;
@@ -318,6 +331,13 @@ catbox_core_run(struct trace_context *ctx)
 	while (!got_sig);
 	// tell the kid that it can start given callable now
 	kill(pid, SIGUSR1);
+
+	// when we're interrupted child shouldn't continue on
+	// running. pass the signal on to child...
+	child_pid = pid;
+	signal(SIGINT, sigint);
+	signal(SIGTERM, sigterm);
+
 	waitpid(pid, NULL, 0);
 
 	kid = add_child(ctx, pid);
