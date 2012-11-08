@@ -180,7 +180,5 @@ static PyMethodDef methods[] = {
 PyMODINIT_FUNC
 initcatbox(void)
 {
-	PyObject *m;
-
-	m = Py_InitModule3("catbox", methods, doc_catbox);
+	Py_InitModule3("catbox", methods, doc_catbox);
 }
