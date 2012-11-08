@@ -49,6 +49,12 @@ static char doc_canonical[] = "Resolve and simplify given path.\n"
 "    path string.";
 
 static PyObject *
+catbox_version(PyObject *self)
+{
+return PyString_FromString(CATBOX_VERSION());
+}
+
+static PyObject *
 catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 {
 	static char *kwlist[] = {
@@ -156,6 +162,7 @@ catbox_canonical(PyObject *self, PyObject *args, PyObject *kwargs)
 static PyMethodDef methods[] = {
 	{ "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS, doc_run },
 	{ "canonical", (PyCFunction) catbox_canonical, METH_VARARGS | METH_KEYWORDS, doc_canonical },
+	{ "version", (PyCFunction) catbox_version, 0, NULL },
 	{ NULL, NULL, 0, NULL }
 };
 

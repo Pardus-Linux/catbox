@@ -39,8 +39,17 @@ def main():
         action='store_true',
         help='collect all violations or exit at first violation'
     )
+    parser.add_option(
+        '-v',
+        '--version',
+        action='store_true',
+        help='print version information'
+    )
 
     opts, args = parser.parse_args()
+    if opts.version:
+        print catbox.version()
+
     exit_val = 0
     for cmd in args:
         ret = catbox.run(

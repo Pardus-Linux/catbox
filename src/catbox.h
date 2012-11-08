@@ -15,6 +15,14 @@
 #include <unistd.h>
 #include <signal.h>
 
+#ifndef VERSION
+	#warning "CATBOX_VERSION is not defined"
+	#define VERSION "UNDEFINED"
+#endif
+#define STR_EXPAND(x) #x
+#define STR(x) STR_EXPAND(x)
+#define CATBOX_VERSION() STR(VERSION)
+
 /* per process tracking data */
 struct traced_child {
 	/* process id of the traced kid */
