@@ -7,12 +7,11 @@
 ** option) any later version. Please read the COPYING file.
 */
 
+#include <Python.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#include <Python.h>
 
 #ifdef ENABLE_PCRE
 #include <pcre.h>

@@ -16,6 +16,9 @@ import shutil
 import subprocess
 from distutils.core import setup, Extension
 from distutils.command.install import install
+from distutils.command.bdist import bdist
+from distutils.command.build import build
+from distutils.command.build_ext import build_ext
 
 version='1.3'
 
@@ -28,7 +31,14 @@ distfiles = """
     tests/*.py
 """
 
-enable_pcre = True if os.getenv('ENABLE_PCRE') else False
+source = [
+    'src/catbox.c',
+    'src/core.c',
+    'src/syscall.c',
+    'src/paths.c',
+    'src/retval.c',
+]
+
 if 'dist' in sys.argv:
     distdir = "catbox-%s" % version
     list = []
@@ -49,43 +59,104 @@ if 'dist' in sys.argv:
     shutil.rmtree(distdir)
     sys.exit(0)
 
-class Install(install):
+catbox_options = [('enable-pcre', None, "Enable regular expressions in path definitions (using PCRE)")]
+catbox_boolean_options = ['enable-pcre']
+enable_pcre = False
+
+class Bdist(bdist):
+    user_options = bdist.user_options
+    boolean_options = bdist.boolean_options
+    user_options.extend(catbox_options)
+    boolean_options.extend(catbox_boolean_options)
+
+    def initialize_options(self):
+        self.enable_pcre = enable_pcre
+        bdist.initialize_options(self)
+
     def finalize_options(self):
+        global enable_pcre
+        enable_pcre = self.enable_pcre
+        bdist.finalize_options(self)
+
+
+class BuildExt(build_ext):
+    user_options = build_ext.user_options
+    boolean_options = build_ext.boolean_options
+    user_options.extend(catbox_options)
+    boolean_options.extend(catbox_boolean_options)
+
+    def initialize_options(self):
+        self.enable_pcre = enable_pcre
+        build_ext.initialize_options(self)
+
+    def finalize_options(self):
+        global enable_pcre
+        enable_pcre = self.enable_pcre
+        build_ext.finalize_options(self)
+
+    def build_extension(self, ext):
+        global enable_pcre
+        if enable_pcre:
+            ext.extra_compile_args.append('-DENABLE_PCRE')
+            ext.libraries=['pcre']
+        ext.extra_compile_args.append('-Wall')
+        ext.extra_compile_args.append('-DVERSION=%s' % version)
+        build_ext.build_extension(self, ext)
+
+class Build(build):
+    user_options = build.user_options
+    boolean_options = build.boolean_options
+    user_options.extend(catbox_options)
+    boolean_options.extend(catbox_boolean_options)
+
+    def initialize_options(self):
+        self.enable_pcre = enable_pcre
+        build.initialize_options(self)
+
+    def finalize_options(self):
+        global enable_pcre
+        enable_pcre = self.enable_pcre
+        build.finalize_options(self)
+
+class Install(install):
+    user_options = install.user_options
+    boolean_options = install.boolean_options
+    user_options.extend(catbox_options)
+    boolean_options.extend(catbox_boolean_options)
+
+    def initialize_options(self):
+        self.enable_pcre = enable_pcre
+        install.initialize_options(self)
+
+    def finalize_options(self):
+        global enable_pcre
         # NOTE: for Pardus distribution
         if os.path.exists("/etc/pardus-release"):
             self.install_platlib = '$base/lib/pardus'
             self.install_purelib = '$base/lib/pardus'
+        enable_pcre = self.enable_pcre
         install.finalize_options(self)
     
     def run(self):
         install.run(self)
 
-source = [
-    'src/catbox.c',
-    'src/core.c',
-    'src/syscall.c',
-    'src/paths.c',
-    'src/retval.c',
-]
-
-libraries = ["pcre"] if enable_pcre else []
-extra_compile_args=["-Wall"]
-if enable_pcre:
-    extra_compile_args.append("-DENABLE_PCRE")
-
 setup(
     name='catbox',
+    description='Fast sandbox implementation for Python',
+    author='Pardus Linux',
+    url='https://github.com/Pardus-Linux/catbox',
     version=version,
     scripts=['bin/catbox'],
     ext_modules=[
         Extension(
             'catbox',
             source,
-            extra_compile_args=extra_compile_args,
-            libraries=libraries,
         )
     ],
     cmdclass = {
-        'install' : Install
+        'install'   : Install,
+        'build'     : Build,
+        'build_ext' : BuildExt,
+        'bdist'     : Bdist,
     }
 )
