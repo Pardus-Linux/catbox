@@ -274,11 +274,10 @@ PyObject *
 catbox_core_run(struct trace_context *ctx)
 {
 	struct traced_child *kid;
-	void (*oldsig)(int);
 	pid_t pid;
 
 	got_sig = 0;
-	oldsig = signal(SIGUSR1, sigusr1);
+	signal(SIGUSR1, sigusr1);
 
 	pid = fork();
 	if (pid == (pid_t) -1) {
