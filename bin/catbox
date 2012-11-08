@@ -24,14 +24,19 @@ def main():
         action='store_true',
         help='allow network communication'
     )
+
+    path_help = 'a list of allowed/writeable paths.'
+    if catbox.has_pcre():
+        path_help += ''' paths starting with '~'
+ will be treated as regular expressions'''
+
     parser.add_option(
         '-p',
         '--path',
         dest='paths',
         default=[],
         action='append',
-        help='''a list of allowed/writeable paths. paths starting with '~'
- will be treated as regular expressions (if compiled with ENABLE_PCRE)'''
+        help=path_help
     )
     parser.add_option(
         '--collect-only',
