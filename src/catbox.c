@@ -55,6 +55,16 @@ return PyString_FromString(CATBOX_VERSION());
 }
 
 static PyObject *
+catbox_has_pcre(PyObject *self)
+{
+#ifdef ENABLE_PCRE
+	Py_RETURN_TRUE;
+#else
+	Py_RETURN_FALSE;
+#endif
+}
+
+static PyObject *
 catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 {
 	static char *kwlist[] = {
@@ -163,6 +173,7 @@ static PyMethodDef methods[] = {
 	{ "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS, doc_run },
 	{ "canonical", (PyCFunction) catbox_canonical, METH_VARARGS | METH_KEYWORDS, doc_canonical },
 	{ "version", (PyCFunction) catbox_version, 0, NULL },
+	{ "has_pcre", (PyCFunction) catbox_has_pcre, 0, NULL },
 	{ NULL, NULL, 0, NULL }
 };
 

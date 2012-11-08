@@ -144,7 +144,7 @@ setup(
     name='catbox',
     description='Fast sandbox implementation for Python',
     author='Pardus Linux',
-    url='https://github.com/Pardus-Linux/catbox'
+    url='https://github.com/Pardus-Linux/catbox',
     version=version,
     scripts=['bin/catbox'],
     ext_modules=[
