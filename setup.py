@@ -142,6 +142,9 @@ class Install(install):
 
 setup(
     name='catbox',
+    description='Fast sandbox implementation for Python',
+    author='Pardus Linux',
+    url='https://github.com/Pardus-Linux/catbox'
     version=version,
     scripts=['bin/catbox'],
     ext_modules=[
@@ -154,6 +157,6 @@ setup(
         'install'   : Install,
         'build'     : Build,
         'build_ext' : BuildExt,
-        'bdist'   : Bdist,
+        'bdist'     : Bdist,
     }
 )
