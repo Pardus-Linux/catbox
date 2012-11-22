@@ -252,15 +252,23 @@ core_trace_loop(struct trace_context *ctx)
 
 static int child_pid = 0;
 
-static void sigterm(int sig) {
-	if (child_pid && sig == SIGTERM) {
+static void terminate_child() {
+	if (child_pid) {
 		kill(child_pid, SIGTERM);
+	}
+}
+
+static void sigterm(int sig) {
+	if (sig == SIGTERM) {
+		terminate_child();
 	}
 	exit(1);
 }
 
 static void sigint(int sig) {
-	raise(SIGTERM);
+	if (sig == SIGINT) {
+		raise(SIGTERM);
+	}
 }
 
 // Syncronization value, it has two copies in parent and child's memory spaces
@@ -336,6 +344,7 @@ catbox_core_run(struct trace_context *ctx)
 	child_pid = pid;
 	signal(SIGINT, sigint);
 	signal(SIGTERM, sigterm);
+	atexit(terminate_child);
 
 	waitpid(pid, NULL, 0);
 
