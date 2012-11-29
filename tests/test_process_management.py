@@ -2,5 +2,7 @@ import catbox
 import testify as T
 
 class ProcessManagement(T.TestCase):
-	pass
+
+	def test_dummy(self):
+		assert False
 
