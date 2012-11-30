@@ -336,8 +336,6 @@ catbox_core_run(struct trace_context *ctx)
 
 	// wait until child set ups tracing mode, and sends a signal
 	while (!got_sig);
-	// tell the kid that it can start given callable now
-	kill(pid, SIGUSR1);
 
 	// when we're interrupted child shouldn't continue on
 	// running. pass the signal on to child...
@@ -345,6 +343,19 @@ catbox_core_run(struct trace_context *ctx)
 	signal(SIGINT, sigint);
 	signal(SIGTERM, sigterm);
 	atexit(terminate_child);
+
+	// Run init_hook before notifying child to continue.
+	if (ctx->init_hook) {
+		PyObject *ret = PyObject_Call(ctx->init_hook, PyTuple_New(0), NULL);
+		if (!ret) {
+			printf("Catbox: Init hook failed for child (pid: %d)\n", child_pid);
+			exit(1);
+		}
+	}
+
+	// tell the kid that it can start given callable now
+	kill(pid, SIGUSR1);
+
 
 	waitpid(pid, NULL, 0);
 

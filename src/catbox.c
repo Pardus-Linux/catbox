@@ -27,10 +27,12 @@ static char doc_run[] = "Run given function in a sandbox.\n"
 "    writable_paths: A list of allowed paths.\n"
 #endif
 "    network: Give a false value for disabling network communication.\n"
-"    logger: Another callable, will be called with operation, path, resolved path\n"
-"            arguments for each sandbox violation.\n"
-"     collect_only: When set catbox collects all violations otherwise\n"
-"                   it'll exit after first violation.\n"
+"    logger: Called with operation, path, resolved path arguments for\n"
+"            each sandbox violation.\n"
+"    init_hook: Called by parent process after the child is ready to\n"
+"                be traced.\n"
+"    collect_only: When set catbox collects all violations otherwise\n"
+"                  it'll exit after first violation.\n"
 "\n"
 "    Everything except function are optional. Return value is an object\n"
 "    with two attributes:\n"
@@ -73,6 +75,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		"network",
 		"collect_only",
 		"logger",
+		"init_hook",
 		"args",
 		NULL
 	};
@@ -86,8 +89,8 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 
 	memset(&ctx, 0, sizeof(struct trace_context));
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOO",
-		kwlist, &ctx.func, &paths, &net, &collect_only, &ctx.logger, &ctx.func_args))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOOO",
+		 kwlist, &ctx.func, &paths, &net, &collect_only, &ctx.logger, &ctx.init_hook, &ctx.func_args))
 			return NULL;
 
 	if (PyCallable_Check(ctx.func) == 0) {
@@ -97,6 +100,11 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 
 	if (ctx.logger && PyCallable_Check(ctx.logger) == 0) {
 		PyErr_SetString(PyExc_TypeError, "Logger should be a callable function");
+		return NULL;
+	}
+
+	if (ctx.init_hook && PyCallable_Check(ctx.init_hook) == 0) {
+		PyErr_SetString(PyExc_TypeError, "Init hook should be a callable function");
 		return NULL;
 	}
 
