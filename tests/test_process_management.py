@@ -20,12 +20,13 @@ class ProcessManagement(T.TestCase):
 		self.epoll = select.epoll()
 		self.epoll.register(self.read_pipe, select.EPOLLIN | select.EPOLLET)
 
-		def __child_function():
-			os.write(self.write_pipe, self.expected_message_from_child)
-		self.child_function = __child_function
+	@T.teardown
+	def close_pipe(self):
+		os.close(self.read_pipe)
+		os.close(self.write_pipe)
 
-	def run_child_function_in_catbox(self):
-		catbox.run(self.child_function)
+	def run_child_function_in_catbox(self, child_function):
+		catbox.run(child_function)
 		events = self.epoll.poll(.1)
 		if events:
 			first_event = events[0]
@@ -41,15 +42,15 @@ class ProcessManagement(T.TestCase):
 		running the given function reporting back to parent through a
 		Unix pipe.
 		"""
-		self.run_child_function_in_catbox()
+		def child_function():
+			os.write(self.write_pipe, self.expected_message_from_child)
+		self.run_child_function_in_catbox(child_function)
 
 	def test_child_does_not_report_back(self):
 		def lazy_child():
 			pass
-		self.child_function = lazy_child
-
 		with T.assert_raises(ChildDidNotReportBackException):
 			# lazy_child function will not report anything back and
 			# parent should timeout waiting for it.
-			self.run_child_function_in_catbox()
+			self.run_child_function_in_catbox(lazy_child)
 
