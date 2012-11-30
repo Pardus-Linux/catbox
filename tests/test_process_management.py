@@ -4,6 +4,9 @@ import select
 import catbox
 import testify as T
 
+class ChildDidNotReportBackException(Exception):
+	pass
+
 class ProcessManagement(T.TestCase):
 
 	@T.setup
@@ -21,14 +24,8 @@ class ProcessManagement(T.TestCase):
 			os.write(self.write_pipe, self.expected_message_from_child)
 		self.child_function = __child_function
 
-	def test_child(self):
-		"""catbox.run will fork(). Child process will execute
-		self.child_function. This test verifies that child is actually
-		running the given function reporting back to parent through a
-		Unix pipe.
-		"""
+	def run_child_function_in_catbox(self):
 		catbox.run(self.child_function)
-
 		events = self.epoll.poll(.1)
 		if events:
 			first_event = events[0]
@@ -36,4 +33,23 @@ class ProcessManagement(T.TestCase):
 			actual_message_from_child = os.read(read_fd, self.MAX_READ_SIZE)
 			T.assert_equal(actual_message_from_child, self.expected_message_from_child)
 		else:
-			assert False, "Child did not report back!"
+			raise ChildDidNotReportBackException
+
+	def test_child(self):
+		"""catbox.run will fork(). Child process will execute
+		self.child_function. This test verifies that child is actually
+		running the given function reporting back to parent through a
+		Unix pipe.
+		"""
+		self.run_child_function_in_catbox()
+
+	def test_child_does_not_report_back(self):
+		def lazy_child():
+			pass
+		self.child_function = lazy_child
+
+		with T.assert_raises(ChildDidNotReportBackException):
+			# lazy_child function will not report anything back and
+			# parent should timeout waiting for it.
+			self.run_child_function_in_catbox()
+
