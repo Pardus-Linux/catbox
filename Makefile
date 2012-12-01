@@ -4,7 +4,7 @@ all: test
 
 test: build
 	@echo "Testing..."
-	PYTHONPATH=${BUILD_LIB_DIR} testify tests
+	PYTHONPATH=${BUILD_LIB_DIR} testify -v --summary tests
 
 build:
 	python setup.py build --enable-pcre --build-lib=${BUILD_LIB_DIR}
