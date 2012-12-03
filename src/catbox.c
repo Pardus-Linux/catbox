@@ -29,8 +29,8 @@ static char doc_run[] = "Run given function in a sandbox.\n"
 "    network: Give a false value for disabling network communication.\n"
 "    logger: Called with operation, path, resolved path arguments for\n"
 "            each sandbox violation.\n"
-"    init_hook: Called by parent process after the child is ready to\n"
-"                be traced.\n"
+"    event_hooks: Event hooks are passed as a dictionary. See documentation\n"
+"                 for available event hooks event hooks.\n"
 "    collect_only: When set catbox collects all violations otherwise\n"
 "                  it'll exit after first violation.\n"
 "\n"
@@ -75,7 +75,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		"network",
 		"collect_only",
 		"logger",
-		"init_hook",
+		"event_hooks",
 		"args",
 		NULL
 	};
@@ -90,7 +90,7 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 	memset(&ctx, 0, sizeof(struct trace_context));
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOOO",
-		 kwlist, &ctx.func, &paths, &net, &collect_only, &ctx.logger, &ctx.init_hook, &ctx.func_args))
+		 kwlist, &ctx.func, &paths, &net, &collect_only, &ctx.logger, &ctx.event_hooks, &ctx.func_args))
 			return NULL;
 
 	if (PyCallable_Check(ctx.func) == 0) {
@@ -98,14 +98,39 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 		return NULL;
 	}
 
-	if (ctx.logger && PyCallable_Check(ctx.logger) == 0) {
-		PyErr_SetString(PyExc_TypeError, "Logger should be a callable function");
-		return NULL;
+	if (ctx.logger) {
+		if (ctx.logger == Py_None) {
+			ctx.logger = NULL;
+		} else if (PyCallable_Check(ctx.logger) == 0) {
+			PyErr_SetString(PyExc_TypeError, "Logger should be a callable function");
+			return NULL;
+		}
 	}
 
-	if (ctx.init_hook && PyCallable_Check(ctx.init_hook) == 0) {
-		PyErr_SetString(PyExc_TypeError, "Init hook should be a callable function");
-		return NULL;
+	if (ctx.event_hooks) {
+		if (ctx.event_hooks == Py_None) {
+			ctx.event_hooks = NULL;
+		} else if (PyDict_Check(ctx.event_hooks)) {
+			PyObject *hook_names = PyDict_Keys(ctx.event_hooks);
+			PyObject *callables = PyDict_Values(ctx.event_hooks);
+			Py_ssize_t event_hooks_size = PyList_Size(callables);
+			Py_ssize_t index;
+			for (index = 0; index < event_hooks_size; index++) {
+				PyObject *callable = PyList_GetItem(callables, index);
+				if (!PyCallable_Check(callable)) {
+					PyObject *hook_name = PyList_GetItem(hook_names, index);
+					PyObject *error_string = PyString_FromFormat(
+												 "Event hook %s should be a callable function",
+												 PyString_AsString(hook_name)
+											 );
+					PyErr_SetString(PyExc_TypeError, PyString_AsString(error_string));
+					return NULL;
+				}
+			}
+		} else {
+			PyErr_SetString(PyExc_TypeError, "Event hooks should be a dictionary");
+			return NULL;
+		}
 	}
 
 	if (paths) {
