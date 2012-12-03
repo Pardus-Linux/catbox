@@ -39,7 +39,7 @@ run_python_callable(PyObject *callable, PyObject *args)
 		// Callable exits by unhandled exception
 		// So let child print error and value to stderr
 		PyErr_Display(e, val, tb);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -50,6 +50,38 @@ run_event_hook(struct trace_context *ctx, const char *hook_name, PyObject *args)
 	if (ctx->event_hooks && PyDict_Contains(ctx->event_hooks, py_hook_name) == 1) {
 		PyObject *hook = PyDict_GetItem(ctx->event_hooks, py_hook_name);
 		run_python_callable(hook, args);
+	}
+}
+
+static void
+watchdog(struct trace_context *ctx, int watchdog_read_fd) {
+	char buf;
+	// Block on reading from wathcdog pipe.
+	int nread = read(watchdog_read_fd, &buf, 1);
+	if (nread <= 0) {
+		printf("Alarm! Parent died!!! Killing the process group\n");
+		kill(getpgid(getpid()), SIGKILL);
+	}
+	exit(0);
+}
+
+static void
+start_watchdog(struct trace_context *ctx)
+{
+	int watchdog_pid;
+	int watchdog_fds[2];
+
+	if (pipe(watchdog_fds) == -1) {
+		perror("pipe");
+		exit(EXIT_FAILURE);
+	}
+
+	watchdog_pid = fork();
+	if (!watchdog_pid) {
+		close(watchdog_fds[0]);
+		watchdog(ctx, watchdog_fds[1]);
+	} else {
+		close(watchdog_fds[1]);
 	}
 }
 
@@ -304,7 +336,7 @@ static void sigterm(int sig)
 	if (sig == SIGTERM) {
 		terminate_child();
 	}
-	exit(1);
+	exit(EXIT_FAILURE);
 }
 
 static void sigint(int sig)
@@ -368,6 +400,9 @@ catbox_core_run(struct trace_context *ctx)
 	signal(SIGINT, sigint);
 	signal(SIGTERM, sigterm);
 	atexit(terminate_child);
+
+	// Start watchdog process
+	start_watchdog(ctx);
 
 	// Run child_initialized hook before notifying child to continue.
 	PyObject *args = PyTuple_New(1);

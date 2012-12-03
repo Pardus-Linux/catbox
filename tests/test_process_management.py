@@ -1,3 +1,8 @@
+import os
+import signal
+import sys
+import time
+
 import testing
 import testify as T
 
@@ -21,36 +26,27 @@ class ProcessManagementTestCase(testing.BaseTestCase):
             self.run_child_function_in_catbox(lazy_child)
             self.verify_message_from_child()
 
-#class ProcessGroupManagementTestCase(ProcessManagementBaseTestCase):
 
-    # @T.setup
-    # def setup_parent_watchdog(self):
-    #   pid = os.fork()
-    #   if pid == 0: # child
-    #       self.watchdog()
-    #       sys.exit(0)
-    #   else: # parent
-    #       print "watchdog pid:", pid
-    #       pass
+class ProcessGroupManagementTestCase(testing.BaseTestCase):
 
-    # def watchdog(self):
-    #   print "watchdog"
-    #   while True:
-    #       pass
+    def test_watchdog(self):
+		def sleeping_child_function():
+			time.sleep(10)
 
-    # def test_init_hook_closes_pipe(self):
-    #   def init_hook_function():
-    #       os.close(self.write_pipe)
+		# To test watchdog we'll kill the parent and see if the
+		# watchdog takes care of killing the child process. We'll fork
+		# here and run catbox in the forked process to kill the catbox
+		# parent prematurely.
+		catbox_pid = os.fork()
+		if not catbox_pid: # catbox process
+			self.run_child_function_in_catbox(
+				child_function=sleeping_child_function
+			)
+		else:
+			# Killing catbox (parent) will trigger watchdog process
+			# and it will kill the process group.
+			os.kill(catbox_pid, signal.SIGKILL)
 
-    #   def child_function():
-    #       os.close(self.read_pipe)
-    #       try:
-    #           os.write(self.write_pipe, self.default_expected_message_from_child)
-    #       except:
-    #           print "WRITE FAILED!"
-    #       else:
-    #           print "FINE!"
-
-    #   self.run_child_function_in_catbox(init_hook=init_hook_function, child_function=child_function)
-    #   self.verify_message_from_child()
-
+		assert self.is_process_alive(catbox_pid)
+		# TODO: find a way to check if traced process (catbox's child)
+		# is alive.

@@ -1,3 +1,4 @@
+import errno
 import os
 import select
 
@@ -58,3 +59,17 @@ class BaseTestCase(T.TestCase):
     def run_child_function_in_catbox(self, child_function=None, event_hooks=None):
         child_function = child_function or self.default_child_function
         catbox.run(child_function, event_hooks=event_hooks)
+
+    def is_process_alive(self, pid):
+        """Sends null signal to a process to check if it's alive"""
+        try:
+            # Sending the null signal (sig. 0) to the process will check
+            # pid's validity.
+            os.kill(pid, 0)
+        except OSError, e:
+            # Access denied, but process is alive
+            return e.errno == errno.EPERM
+        except:
+            return False
+        else:
+            return True
