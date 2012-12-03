@@ -10,7 +10,8 @@ class EventHooksTestCase(testing.BaseTestCase):
 
     def test_invalid_event_hooks(self):
         event_hooks = {"child_initialized_hook" : "invalid_event_hook"}
-        T.assert_raises(TypeError, self.run_child_function_in_catbox, event_hooks=event_hooks)
+        with T.assert_raises(TypeError):
+			self.run_child_function_in_catbox(event_hooks=event_hooks)
 
     def test_successful_child_initialized_hook(self):
         expected_message_from_init_function = "Init function is successful!"
