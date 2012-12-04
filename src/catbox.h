@@ -51,6 +51,8 @@ struct trace_context {
 	PyObject *func_args;
 	/* violation logger function */
 	PyObject *logger;
+	/* Python functions that will be run by parent after child is ready to be traced. */
+	PyObject *event_hooks;
 	/* this object keeps everything to be returned to the caller */
 	PyObject *retval;
 	/* allowed path list */

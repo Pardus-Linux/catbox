@@ -39,6 +39,31 @@ slow for a build farm. There are over a thousand packages, and
 some of them like OpenOffice.org or kdebase takes a huge time to
 compile even on high end computers.
 
-Thus we wrote catbox, a small sandboxing module for PiSi. It is completely
-written in C, and it wont provide custom system call hooks or advanced
-modifications to the guest environment like Subterfugue.
+Thus we wrote catbox, a small sandboxing module for PiSi (the package
+manager for Pardus Linux). It is completely written in C, and it wont
+provide custom system call hooks or advanced modifications to the
+guest environment like Subterfugue.
+
+Although, catbox started as a sandboxing module for PiSi, it is now a
+more generic sandbox module that can be used generically.
+
+Event Hooks:
+
+* child_initialized(pid): Event hook is called on parent process but
+  after child is initialized to be traced and before parent notifies
+  child to continue. Pid of the child process is given as the only
+  argument. (available in version 1.4+)
+
+* child_died_unexpectedly(pid): Event hook is called when we got a
+  signal/event from a child but the child was already dead. Pid of the
+  child process is given as the only argument. (available in version
+  1.4+)
+
+
+Dependencies:
+
+* pcre (OPTIONAL): If enabled path can be defined with regular
+  expressions. Just append --enable-pcre to the setup.py command.
+
+* Testify: (https://github.com/Yelp/Testify) Testify is used for
+  unittests only.

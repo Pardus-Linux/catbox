@@ -13,14 +13,13 @@ import sys
 import os
 import glob
 import shutil
-import subprocess
 from distutils.core import setup, Extension
 from distutils.command.install import install
 from distutils.command.bdist import bdist
 from distutils.command.build import build
 from distutils.command.build_ext import build_ext
 
-version='1.3'
+version='1.4'
 
 distfiles = """
     setup.py
