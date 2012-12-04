@@ -36,7 +36,10 @@ class EventHooksTestCase(testing.BaseTestCase):
             os.setpgid(os.getpid(), os.getpid())
 
             event_hooks = {"child_initialized" : child_initialized_hook}
-            self.run_child_function_in_catbox(event_hooks=event_hooks)
+            with testing.no_stderr():
+                # This will fail. redirecting stderr to /dev/null will
+                # silence the test output.
+                self.run_child_function_in_catbox(event_hooks=event_hooks)
         else:
             status = 0
             wait_pid = 0

@@ -61,9 +61,11 @@ watchdog(struct trace_context *ctx, int watchdog_read_fd) {
 	char buf;
 	// Block on reading from wathcdog pipe.
 	int nread = read(watchdog_read_fd, &buf, 1);
+
+	int process_group = getpgid(getpid());
 	if (nread == 0) {
 		printf("BORKBORK: Parent died! Killing the process group.\n");
-		killpg(getpgid(getpid()), SIGKILL);
+		killpg(process_group, SIGKILL);
 	}
 	exit(0);
 }
