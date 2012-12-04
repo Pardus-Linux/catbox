@@ -17,6 +17,77 @@
 #include <fcntl.h>
 #include <errno.h>
 
+static int child_pid = 0;
+static int watchdog_pid = 0;
+
+static void
+run_python_callable(PyObject *callable, PyObject *args)
+{
+	PyObject *ret = PyObject_Call(callable, args, NULL);
+
+	if (!ret) {
+		PyObject *e;
+		PyObject *val;
+		PyObject *tb;
+		PyErr_Fetch(&e, &val, &tb);
+		if (PyErr_GivenExceptionMatches(e, PyExc_SystemExit)) {
+			if (PyInt_Check(val)) {
+				// Callable exits by sys.exit(n)
+				exit(PyInt_AsLong(val));
+			} else {
+				// Callable exits by sys.exit()
+				exit(2);
+			}
+		}
+		// Callable exits by unhandled exception
+		// So let child print error and value to stderr
+		PyErr_Display(e, val, tb);
+		exit(EXIT_FAILURE);
+	}
+}
+
+static void
+run_event_hook(struct trace_context *ctx, const char *hook_name, PyObject *args)
+{
+	PyObject *py_hook_name = PyString_FromString(hook_name);
+	if (ctx->event_hooks && PyDict_Contains(ctx->event_hooks, py_hook_name) == 1) {
+		PyObject *hook = PyDict_GetItem(ctx->event_hooks, py_hook_name);
+		run_python_callable(hook, args);
+	}
+}
+
+static void
+watchdog(struct trace_context *ctx, int watchdog_read_fd) {
+	char buf;
+	// Block on reading from wathcdog pipe.
+	int nread = read(watchdog_read_fd, &buf, 1);
+
+	if (nread == 0) {
+		printf("BORKBORK: Parent died! Watchdog is killing the traced process.\n");
+		kill(child_pid, SIGKILL);
+	}
+	exit(0);
+}
+
+static void
+start_watchdog(struct trace_context *ctx)
+{
+	int watchdog_fds[2];
+
+	if (pipe(watchdog_fds) == -1) {
+		perror("pipe");
+		exit(EXIT_FAILURE);
+	}
+
+	watchdog_pid = fork();
+	if (!watchdog_pid) { // Watchdog
+		close(watchdog_fds[1]); // Close the write end of the pipe.
+		watchdog(ctx, watchdog_fds[0]); // Watchdog will poll on the read end.
+	} else { // Parent (catbox) process
+		close(watchdog_fds[0]); // Close the read end of the pipe.
+	}
+}
+
 static void
 setup_kid(struct traced_child *kid)
 {
@@ -92,6 +163,10 @@ rem_child(struct trace_context *ctx, pid_t pid)
 {
 	struct traced_child *kid, *temp;
 	int hash;
+
+	if (pid == watchdog_pid) {
+		return;
+	}
 
 	hash = pid_hash(pid);
 	kid = ctx->children[hash];
@@ -193,9 +268,13 @@ core_trace_loop(struct trace_context *ctx)
 		if (pid == (pid_t) -1) return NULL;
 		kid = find_child(ctx, pid);
 		event = decide_event(ctx, kid, status);
-		if (!kid && event != E_SETUP_PREMATURE) {
+		if (!kid && event != E_SETUP_PREMATURE && pid != watchdog_pid) {
 			// This shouldn't happen
 			printf("BORKBORK: nr %d, pid %d, status %x, event %d\n", ctx->nr_children, pid, status, event);
+
+			PyObject *args = PyTuple_New(1);
+			PyTuple_SetItem(args, 0, PyInt_FromLong(pid));
+			run_event_hook(ctx, "child_died_unexpectedly", args);
 		}
 
 		switch (event) {
@@ -250,23 +329,33 @@ core_trace_loop(struct trace_context *ctx)
 	return ctx->retval;
 }
 
-static int child_pid = 0;
-
-static void sigterm(int sig) {
-	if (child_pid && sig == SIGTERM) {
+static void terminate_child(void)
+{
+	if (child_pid) {
 		kill(child_pid, SIGTERM);
 	}
-	exit(1);
 }
 
-static void sigint(int sig) {
-	raise(SIGTERM);
+static void sigterm(int sig)
+{
+	if (sig == SIGTERM) {
+		terminate_child();
+	}
+	exit(EXIT_FAILURE);
+}
+
+static void sigint(int sig)
+{
+	if (sig == SIGINT) {
+		raise(SIGTERM);
+	}
 }
 
 // Syncronization value, it has two copies in parent and child's memory spaces
 static sig_atomic_t volatile got_sig = 0;
 
-static void sigusr1(int dummy) {
+static void sigusr1(int dummy)
+{
 	got_sig = 1;
 }
 
@@ -287,7 +376,6 @@ catbox_core_run(struct trace_context *ctx)
 
 	if (pid == 0) {
 		// child process comes to life
-		PyObject *ret;
 		PyObject *args;
 
 		// set up tracing mode
@@ -300,26 +388,8 @@ catbox_core_run(struct trace_context *ctx)
 		// let the callable do its job
 		args = ctx->func_args;
 		if (!args) args = PyTuple_New(0);
-		ret = PyObject_Call(ctx->func, args, NULL);
+		run_python_callable(ctx->func, args);
 
-		if (!ret) {
-			PyObject *e;
-			PyObject *val;
-			PyObject *tb;
-			PyErr_Fetch(&e, &val, &tb);
-			if (PyErr_GivenExceptionMatches(e, PyExc_SystemExit)) {
-				if (PyInt_Check(val))
-					// Callable exits by sys.exit(n)
-					exit(PyInt_AsLong(val));
-				else
-					// Callable exits by sys.exit()
-					exit(2);
-			}
-			// Callable exits by unhandled exception
-			// So let child print error and value to stderr
-			PyErr_Display(e, val, tb);
-			exit(1);
-		}
 		// Callable exits by returning from function normally
 		exit(0);
 	}
@@ -328,14 +398,25 @@ catbox_core_run(struct trace_context *ctx)
 
 	// wait until child set ups tracing mode, and sends a signal
 	while (!got_sig);
-	// tell the kid that it can start given callable now
-	kill(pid, SIGUSR1);
 
 	// when we're interrupted child shouldn't continue on
 	// running. pass the signal on to child...
 	child_pid = pid;
 	signal(SIGINT, sigint);
 	signal(SIGTERM, sigterm);
+	atexit(terminate_child);
+
+	// Run child_initialized hook before notifying child to continue.
+	PyObject *args = PyTuple_New(1);
+	PyTuple_SetItem(args, 0, PyInt_FromLong(child_pid));
+	run_event_hook(ctx, "child_initialized", args);
+
+	// Start watchdog process
+	start_watchdog(ctx);
+
+	// tell the kid that it can start given callable now
+	kill(pid, SIGUSR1);
+
 
 	waitpid(pid, NULL, 0);
 
