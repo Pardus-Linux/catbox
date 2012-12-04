@@ -58,3 +58,12 @@ Event Hooks:
   signal/event from a child but the child was already dead. Pid of the
   child process is given as the only argument. (available in version
   1.4+)
+
+
+Dependencies:
+
+* pcre (OPTIONAL): If enabled path can be defined with regular
+  expressions. Just append --enable-pcre to the setup.py command.
+
+* Testify: (https://github.com/Yelp/Testify) Testify is used for
+  unittests only.
