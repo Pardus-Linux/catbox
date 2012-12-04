@@ -63,7 +63,7 @@ watchdog(struct trace_context *ctx, int watchdog_read_fd) {
 	int nread = read(watchdog_read_fd, &buf, 1);
 
 	if (nread == 0) {
-		printf("BORKBORK: Parent died! Killing the process group.\n");
+		printf("BORKBORK: Parent died! Watchdog is killing the traced process.\n");
 		kill(child_pid, SIGKILL);
 	}
 	exit(0);
