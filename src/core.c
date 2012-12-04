@@ -17,6 +17,9 @@
 #include <fcntl.h>
 #include <errno.h>
 
+static int child_pid = 0;
+static int watchdog_pid = 0;
+
 static void
 run_python_callable(PyObject *callable, PyObject *args)
 {
@@ -58,9 +61,9 @@ watchdog(struct trace_context *ctx, int watchdog_read_fd) {
 	char buf;
 	// Block on reading from wathcdog pipe.
 	int nread = read(watchdog_read_fd, &buf, 1);
-	if (nread <= 0) {
-		printf("Alarm! Parent died!!! Killing the process group\n");
-		kill(getpgid(getpid()), SIGKILL);
+	if (nread == 0) {
+		printf("BORKBORK: Parent died! Killing the process group.\n");
+		killpg(getpgid(getpid()), SIGKILL);
 	}
 	exit(0);
 }
@@ -68,7 +71,6 @@ watchdog(struct trace_context *ctx, int watchdog_read_fd) {
 static void
 start_watchdog(struct trace_context *ctx)
 {
-	int watchdog_pid;
 	int watchdog_fds[2];
 
 	if (pipe(watchdog_fds) == -1) {
@@ -77,11 +79,11 @@ start_watchdog(struct trace_context *ctx)
 	}
 
 	watchdog_pid = fork();
-	if (!watchdog_pid) {
-		close(watchdog_fds[0]);
-		watchdog(ctx, watchdog_fds[1]);
-	} else {
-		close(watchdog_fds[1]);
+	if (!watchdog_pid) { // Watchdog
+		close(watchdog_fds[1]); // Close the write end of the pipe.
+		watchdog(ctx, watchdog_fds[0]); // Watchdog will poll on the read end.
+	} else { // Parent (catbox) process
+		close(watchdog_fds[0]); // Close the read end of the pipe.
 	}
 }
 
@@ -160,6 +162,10 @@ rem_child(struct trace_context *ctx, pid_t pid)
 {
 	struct traced_child *kid, *temp;
 	int hash;
+
+	if (pid == watchdog_pid) {
+		return;
+	}
 
 	hash = pid_hash(pid);
 	kid = ctx->children[hash];
@@ -261,7 +267,7 @@ core_trace_loop(struct trace_context *ctx)
 		if (pid == (pid_t) -1) return NULL;
 		kid = find_child(ctx, pid);
 		event = decide_event(ctx, kid, status);
-		if (!kid && event != E_SETUP_PREMATURE) {
+		if (!kid && event != E_SETUP_PREMATURE && pid != watchdog_pid) {
 			// This shouldn't happen
 			printf("BORKBORK: nr %d, pid %d, status %x, event %d\n", ctx->nr_children, pid, status, event);
 
@@ -321,8 +327,6 @@ core_trace_loop(struct trace_context *ctx)
 	catbox_retval_set_exit_code(ctx, retcode);
 	return ctx->retval;
 }
-
-static int child_pid = 0;
 
 static void terminate_child(void)
 {
@@ -401,13 +405,13 @@ catbox_core_run(struct trace_context *ctx)
 	signal(SIGTERM, sigterm);
 	atexit(terminate_child);
 
-	// Start watchdog process
-	start_watchdog(ctx);
-
 	// Run child_initialized hook before notifying child to continue.
 	PyObject *args = PyTuple_New(1);
 	PyTuple_SetItem(args, 0, PyInt_FromLong(child_pid));
 	run_event_hook(ctx, "child_initialized", args);
+
+	// Start watchdog process
+	start_watchdog(ctx);
 
 	// tell the kid that it can start given callable now
 	kill(pid, SIGUSR1);

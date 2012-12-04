@@ -30,23 +30,35 @@ class ProcessManagementTestCase(testing.BaseTestCase):
 class ProcessGroupManagementTestCase(testing.BaseTestCase):
 
     def test_watchdog(self):
-		def sleeping_child_function():
-			time.sleep(10)
+        def sleeping_child_function():
+			time.sleep(5)
 
-		# To test watchdog we'll kill the parent and see if the
-		# watchdog takes care of killing the child process. We'll fork
-		# here and run catbox in the forked process to kill the catbox
-		# parent prematurely.
-		catbox_pid = os.fork()
-		if not catbox_pid: # catbox process
-			self.run_child_function_in_catbox(
-				child_function=sleeping_child_function
-			)
-		else:
-			# Killing catbox (parent) will trigger watchdog process
-			# and it will kill the process group.
-			os.kill(catbox_pid, signal.SIGKILL)
+        # To test watchdog we'll kill the parent and see if the
+        # watchdog takes care of killing the child process. We'll fork
+        # here and run catbox in the forked process to kill the catbox
+        # parent prematurely.
+        catbox_pid = os.fork()
+        if not catbox_pid: # catbox process
 
-		assert self.is_process_alive(catbox_pid)
-		# TODO: find a way to check if traced process (catbox's child)
-		# is alive.
+            # Change process group. We do not want catbox watchdog to
+            # kill our test process (testify) too.
+            os.setpgid(os.getpid(), os.getpid())
+
+            self.run_child_function_in_catbox(
+                child_function=sleeping_child_function
+            )
+            assert False, "Shouldn't get here. Parent should kill us already."
+            sys.exit(0)
+        else:
+			# wait for catbox and traced child to start up and
+			# initialized. We're just sleeping enough for catbox
+			# process to have a chance to start running.
+            time.sleep(.1)
+
+            # Killing catbox (parent) will trigger watchdog process
+            # and it will kill the process group.
+            os.kill(catbox_pid, signal.SIGKILL)
+
+        assert self.is_process_alive(catbox_pid)
+        # TODO: find a way to check if traced process (catbox's child)
+        # is alive.

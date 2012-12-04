@@ -25,6 +25,7 @@ class BaseTestCase(T.TestCase):
         self.epoll.register(self.read_pipe, select.EPOLLIN | select.EPOLLET)
 
         def child_function():
+            os.close(self.read_pipe)
             os.write(self.write_pipe, self.default_expected_message_from_child)
 
         self.default_child_function = child_function
@@ -47,7 +48,7 @@ class BaseTestCase(T.TestCase):
             read_fd = first_event[0]
             return os.read(read_fd, self.MAX_READ_SIZE)
         return False
-        
+
     def verify_message_from_child(self, expected_message=None):
         expected_message = expected_message or self.default_expected_message_from_child
         actual_message_from_child = self.poll()
