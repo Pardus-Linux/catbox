@@ -59,11 +59,11 @@ def main():
     for cmd in args:
         ret = catbox.run(
             run,
-            opts.paths,
-            opts.network,
-            opts.collect_only,
-            logger,
-            (cmd,)
+            writable_paths=opts.paths,
+            network=opts.network,
+            collect_only=opts.collect_only,
+            logger=logger,
+            args=(cmd,)
         )
 
         if ret.violations:
