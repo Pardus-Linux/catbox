@@ -31,10 +31,6 @@ class EventHooksTestCase(testing.BaseTestCase):
         # the new child.
         pid = os.fork()
         if not pid:
-            # Change process group. We do not want catbox watchdog to
-            # kill our test process (testify) too.
-            os.setpgid(os.getpid(), os.getpid())
-
             event_hooks = {"child_initialized" : child_initialized_hook}
             with testing.no_stderr():
                 # This will fail. redirecting stderr to /dev/null will

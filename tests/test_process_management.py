@@ -42,11 +42,6 @@ class ProcessGroupManagementTestCase(testing.BaseTestCase):
         # parent prematurely.
         catbox_pid = os.fork()
         if not catbox_pid: # catbox process
-
-            # Change process group. We do not want catbox watchdog to
-            # kill our test process (testify) too.
-            os.setpgid(os.getpid(), os.getpid())
-
             self.run_child_function_in_catbox(
                 child_function=sleeping_child_function
             )
