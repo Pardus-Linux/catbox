@@ -28,7 +28,7 @@ class ProcessManagementTestCase(testing.BaseTestCase):
             self.verify_message_from_child()
 
 
-class ProcessGroupManagementTestCase(testing.BaseTestCase):
+class WatchdogTestCase(testing.BaseTestCase):
 
     def test_watchdog(self):
         def sleeping_child_function():
