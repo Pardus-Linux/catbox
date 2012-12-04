@@ -39,10 +39,13 @@ slow for a build farm. There are over a thousand packages, and
 some of them like OpenOffice.org or kdebase takes a huge time to
 compile even on high end computers.
 
-Thus we wrote catbox, a small sandboxing module for PiSi. It is completely
-written in C, and it wont provide custom system call hooks or advanced
-modifications to the guest environment like Subterfugue.
+Thus we wrote catbox, a small sandboxing module for PiSi (the package
+manager for Pardus Linux). It is completely written in C, and it wont
+provide custom system call hooks or advanced modifications to the
+guest environment like Subterfugue.
 
+Although, catbox started as a sandboxing module for PiSi, it is now a
+more generic sandbox module that can be used generically.
 
 Event Hooks:
 
