@@ -63,7 +63,9 @@ watchdog(struct trace_context *ctx, int watchdog_read_fd) {
 	int nread = read(watchdog_read_fd, &buf, 1);
 
 	if (nread == 0) {
-		printf("BORKBORK: Parent died! Watchdog is killing the traced process.\n");
+#ifdef DEBUG
+		fprintf(stderr, "BORKBORK: Parent died! Watchdog is killing the traced process.\n");
+#endif
 		kill(child_pid, SIGKILL);
 	}
 	exit(0);
@@ -104,7 +106,7 @@ setup_kid(struct traced_child *kid)
 		| PTRACE_O_TRACEVFORK
 	);
 	if (e != 0) {
-		printf("ptrace opts error for pid (%d): %s\n", kid->pid, strerror(errno));
+		fprintf(stderr, "ptrace opts error for pid (%d): %s\n", kid->pid, strerror(errno));
 	}
 	kid->need_setup = 0;
 }
@@ -136,7 +138,7 @@ add_child(struct trace_context *ctx, pid_t pid)
 
 	kid = find_child(ctx, pid);
 	if (kid) {
-		printf("BORKBORK: Trying to add existing child\n");
+		fprintf(stderr, "BORKBORK: Trying to add existing child\n");
 	}
 
 	kid = malloc(sizeof(struct traced_child));
@@ -270,7 +272,7 @@ core_trace_loop(struct trace_context *ctx)
 		event = decide_event(ctx, kid, status);
 		if (!kid && event != E_SETUP_PREMATURE && pid != watchdog_pid) {
 			// This shouldn't happen
-			printf("BORKBORK: nr %d, pid %d, status %x, event %d\n", ctx->nr_children, pid, status, event);
+			fprintf(stderr, "BORKBORK: nr %d, pid %d, status %x, event %d\n", ctx->nr_children, pid, status, event);
 
 			PyObject *args = PyTuple_New(1);
 			PyTuple_SetItem(args, 0, PyInt_FromLong(pid));
@@ -291,7 +293,9 @@ core_trace_loop(struct trace_context *ctx)
 				break;
 			case E_FORK:
 				e = ptrace(PTRACE_GETEVENTMSG, pid, 0, &kpid); //get the new kid's pid
-				if (e != 0) printf("geteventmsg %s\n", strerror(e));
+				if (e != 0) {
+					fprintf(stderr, "geteventmsg %s\n", strerror(e));
+				}
 				if (find_child(ctx, kpid)) {
 					// Kid is prematurely born, let it continue its life
 					ptrace(PTRACE_SYSCALL, kpid, 0, 0);
@@ -321,7 +325,7 @@ core_trace_loop(struct trace_context *ctx)
 				rem_child(ctx, pid);
 				break;
 			case E_UNKNOWN:
-				printf("BORKBORK: Unknown signal %x pid %d\n", status, pid);
+				fprintf(stderr, "BORKBORK: Unknown signal %x pid %d\n", status, pid);
 				break;
 		}
 	}
