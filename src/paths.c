@@ -24,7 +24,7 @@ match_re_path(const char *regex, const char *path)
 	int erroffset;
 	re = pcre_compile (regex, 0, &error, &erroffset, 0);
 	if (!re) {
-		printf("ERROR: pcre_compile failed for regex (%s) (offset: %d), %s\n", regex, erroffset, error);
+		fprintf(stderr, "ERROR: pcre_compile failed for regex (%s) (offset: %d), %s\n", regex, erroffset, error);
 		return 0;
 	}
 

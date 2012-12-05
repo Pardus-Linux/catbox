@@ -4,6 +4,9 @@ import time
 import testing
 import testify as T
 
+import catbox
+
+
 class EventHooksTestCase(testing.BaseTestCase):
     def test_non_dictionary_event_hooks(self):
         self.run_child_function_in_catbox(event_hooks=None)
@@ -53,3 +56,6 @@ class EventHooksTestCase(testing.BaseTestCase):
                     0,
                     "Failing child_initialized hook did not make parent exit"
                 )
+
+    def test_catbox_run_with_no_event_hooks(self):
+        catbox.run(self.default_child_function)
