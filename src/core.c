@@ -419,15 +419,15 @@ catbox_core_run(struct trace_context *ctx)
 	start_watchdog(ctx);
 
 	// tell the kid that it can start given callable now
-	kill(pid, SIGUSR1);
+	kill(child_pid, SIGUSR1);
 
 
-	waitpid(pid, NULL, 0);
+	waitpid(child_pid, NULL, 0);
 
-	kid = add_child(ctx, pid);
+	kid = add_child(ctx, child_pid);
 	setup_kid(kid);
 	ctx->first_child = kid;
-	ptrace(PTRACE_SYSCALL, pid, 0, (void *) SIGUSR1);
+	ptrace(PTRACE_SYSCALL, child_pid, 0, (void *) SIGUSR1);
 
 	return core_trace_loop(ctx);
 }
