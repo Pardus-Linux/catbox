@@ -1,6 +1,7 @@
 import os
 import signal
 import sys
+import subprocess
 import time
 
 import testing
@@ -26,6 +27,16 @@ class ProcessManagementTestCase(testing.BaseTestCase):
             # parent should timeout waiting for it.
             self.run_child_function_in_catbox(lazy_child)
             self.verify_message_from_child()
+
+
+    def test_subprocess_kill(self):
+        def child_calling_subprocess_kill():
+            sub = subprocess.Popen(['/bin/sleep', '10'], stdout=subprocess.PIPE)
+            sub.kill()
+            os.write(self.write_pipe, self.default_expected_message_from_child)
+
+        self.run_child_function_in_catbox(child_function=child_calling_subprocess_kill)
+        self.verify_message_from_child()
 
 
 class WatchdogTestCase(testing.BaseTestCase):
