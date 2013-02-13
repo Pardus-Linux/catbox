@@ -269,7 +269,7 @@ core_trace_loop(struct trace_context *ctx)
 		pid = waitpid(-1, &status, __WALL);
 		if (pid == (pid_t) -1) return NULL;
 		kid = find_child(ctx, pid);
-		
+
 		event = decide_event(ctx, kid, status);
 		if (!kid && event != E_SETUP_PREMATURE && pid != watchdog_pid) {
 			// This shouldn't happen
@@ -279,8 +279,8 @@ core_trace_loop(struct trace_context *ctx)
 			PyTuple_SetItem(args, 0, PyInt_FromLong(pid));
 			run_event_hook(ctx, "child_died_unexpectedly", args);
 
-                        // Ignore this pid. No need to continue with it.
-                        continue;
+			// Ignore this pid. No need to continue with it.
+			continue;
 		}
 
 		switch (event) {
