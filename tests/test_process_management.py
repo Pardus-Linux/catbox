@@ -30,9 +30,17 @@ class ProcessManagementTestCase(testing.BaseTestCase):
 
 
     def test_subprocess_kill(self):
+        """Verify that killing the subprocess in the forked process
+        will not have side effects on catbox.
+        """
         def child_calling_subprocess_kill():
-            sub = subprocess.Popen(['/bin/sleep', '10'], stdout=subprocess.PIPE)
+            sleep_time = 5
+            start_time = time.time()
+            sub = subprocess.Popen(['/bin/sleep', '%d' % sleep_time], stdout=subprocess.PIPE)
             sub.kill()
+            sub.wait()
+            elapsed_time = time.time() - start_time
+            assert elapsed_time < sleep_time
             os.write(self.write_pipe, self.default_expected_message_from_child)
 
         self.run_child_function_in_catbox(child_function=child_calling_subprocess_kill)
