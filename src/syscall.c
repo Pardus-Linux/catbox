@@ -360,6 +360,8 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 		}
 		kid->in_syscall = 0;
 	} else { // entering syscall
+		kid->in_syscall = 1;
+
 		// skip extra sigtrap from execve call
 		if (syscall == __NR_execve) {
 			kid->in_execve = 1;
@@ -376,7 +378,6 @@ catbox_syscall_handle(struct trace_context *ctx, struct traced_child *kid)
 				ptrace(PTRACE_SETREGS, pid, 0, &regs);
 			}
 		}
-		kid->in_syscall = 1;
 	}
 out:
 	// continue tracing
