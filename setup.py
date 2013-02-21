@@ -19,7 +19,7 @@ from distutils.command.bdist import bdist
 from distutils.command.build import build
 from distutils.command.build_ext import build_ext
 
-version='1.5'
+version='1.6'
 
 distfiles = """
     setup.py
