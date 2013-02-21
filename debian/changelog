@@ -1,8 +1,14 @@
-catbox (1.5) unstable; urgency=low
+python-catbox (1.6-yelp1) lucid; urgency=low
 
-  * First package.
+  * Bump package for new catbox release
 
- -- Baris Metin <bmetin@yelp.com>  Tue, 04 Dec 2012 15:52:00 -0700
+ -- Baris Metin <bmetin@yelp.com>  Wed, 20 Feb 2013 17:12:29 -0800
+
+python-catbox (1.5-yelp1) unstable; urgency=low
+
+  * Initial Packaging
+
+ -- Keith Mosher <kmosher@yelp.com>  Mon, 17 Dec 2012 20:08:45 -0800
 
 
 
