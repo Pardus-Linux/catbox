@@ -19,7 +19,7 @@ from distutils.command.bdist import bdist
 from distutils.command.build import build
 from setuptools.command.build_ext import build_ext
 
-version='1.6'
+version='1.6.1'
 
 distfiles = """
     setup.py
@@ -135,7 +135,7 @@ class Install(install):
             self.install_purelib = '$base/lib/pardus'
         enable_pcre = self.enable_pcre
         install.finalize_options(self)
-    
+
     def run(self):
         install.run(self)
 
