@@ -13,11 +13,11 @@ import sys
 import os
 import glob
 import shutil
-from distutils.core import setup, Extension
-from distutils.command.install import install
+from setuptools import setup, Extension
+from setuptools.command.install import install
 from distutils.command.bdist import bdist
 from distutils.command.build import build
-from distutils.command.build_ext import build_ext
+from setuptools.command.build_ext import build_ext
 
 version='1.6'
 
