@@ -18,8 +18,15 @@ from setuptools.command.install import install
 from distutils.command.bdist import bdist
 from distutils.command.build import build
 from setuptools.command.build_ext import build_ext
+try:
+    from wheel.bdist_wheel import bdist_wheel
+except ImportError as e:
+    if 'bdist_wheel' in sys.argv:
+        sys.stderr.write("Can not build wheel: %r\n" % e)
+        sys.exit(1)
+    bdist_wheel = bdist
 
-version='1.6.1'
+version='1.6.2'
 
 distfiles = """
     setup.py
@@ -77,6 +84,21 @@ class Bdist(bdist):
         enable_pcre = self.enable_pcre
         bdist.finalize_options(self)
 
+
+class BdistWheel(bdist_wheel):
+    user_options = bdist_wheel.user_options
+    boolean_options = bdist_wheel.boolean_options
+    user_options.extend(catbox_options)
+    boolean_options.extend(catbox_boolean_options)
+
+    def initialize_options(self):
+        self.enable_pcre = enable_pcre
+        bdist_wheel.initialize_options(self)
+
+    def finalize_options(self):
+        global enable_pcre
+        enable_pcre = self.enable_pcre
+        bdist_wheel.finalize_options(self)
 
 class BuildExt(build_ext):
     user_options = build_ext.user_options
@@ -153,9 +175,10 @@ setup(
         )
     ],
     cmdclass = {
-        'install'   : Install,
-        'build'     : Build,
-        'build_ext' : BuildExt,
-        'bdist'     : Bdist,
+        'install'     : Install,
+        'build'       : Build,
+        'build_ext'   : BuildExt,
+        'bdist'       : Bdist,
+        'bdist_wheel' : BdistWheel,
     }
 )
