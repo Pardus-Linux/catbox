@@ -18,6 +18,7 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <netdb.h>
 
 #define UNIX_PATH_MAX 108
 
@@ -204,6 +205,24 @@ path_arg_writable(struct trace_context *ctx, pid_t pid, char *path, const char *
 	return err;
 }
 
+static unsigned long
+peek_long (pid_t pid, const void * ptr) {
+    return ptrace(PTRACE_PEEKDATA, pid, ptr, 0);
+}
+
+static unsigned short
+peek_short (pid_t pid, const void * ptr) {
+    return ptrace(PTRACE_PEEKDATA, pid, ptr, 0) & 0xFFFF;
+}
+
+static void
+peek_buffer (pid_t pid, const void * ptr, char * buffer, int numwords) {
+    int i;
+    for (i = 0; i < numwords*4; i += 4) {
+        *(buffer+i) = peek_long(pid, ptr);
+    }
+}
+
 static int
 handle_syscall(struct trace_context *ctx, pid_t pid, int syscall)
 {
@@ -322,45 +341,26 @@ found:
             unsigned short * family_pos = (void*)&(connect_to->sin_family);
             unsigned short family = ptrace(PTRACE_PEEKDATA, pid, family_pos, 0) & 0xFFFF;
             if (family == AF_INET) {
-                unsigned long * host_pos = (void*)&(connect_to->sin_addr);
-                unsigned short * port_pos = (void*)&(connect_to->sin_port);
-                unsigned long host = ptrace(PTRACE_PEEKDATA, pid, host_pos, 0);
-                unsigned short port = htons(ptrace(PTRACE_PEEKDATA, pid, port_pos, 0) & 0xFFFF);
-                struct in_addr addr;
-                addr.s_addr = host;
-                size_t max_len =  15 + 1 + 5 + 1; // ip + : + 65535 + \0
-                char buffer[max_len];
-                snprintf(buffer, max_len, "%s:%hu", inet_ntoa(addr), port);
+                unsigned long host = peek_long(pid, &connect_to->sin_addr);
+                unsigned short port = htons(peek_short(pid, &connect_to->sin_port));
+                char buffer[15 + 1 + 5 + 1]; // ip + : + 65535 + \0
+                snprintf(buffer, sizeof(buffer), "%s:%hu", inet_ntoa(*(struct in_addr *)&host), port);
                 catbox_retval_add_violation(ctx, name, "", buffer);
             } else if (family == AF_LOCAL) {
                 const struct sockaddr_un * local_struct = (const struct sockaddr_un *) connect_to;
                 const char socket_name[UNIX_PATH_MAX];
-                int i;
-                for (i = 0; i < UNIX_PATH_MAX; i += 4) {
-                    *(int *)(socket_name + i) =
-                            ptrace(PTRACE_PEEKDATA, pid, (void *)&(local_struct->sun_path) + i, 0);
-                }
+                peek_buffer(pid, &local_struct->sun_path, socket_name, UNIX_PATH_MAX / 4);
                 catbox_retval_add_violation(ctx, name, "", socket_name);
             } else if (family == AF_INET6) {
                 const struct sockaddr_in6 * v6_struct = (const struct sockaddr_in6 *) connect_to;
-                unsigned short * port_pos = (void*)&(v6_struct->sin6_port);
-                unsigned short port = htons(ptrace(PTRACE_PEEKDATA, pid, port_pos, 0) & 0xFFFF);
+                unsigned short port = htons(peek_short(pid, &v6_struct->sin6_port));
                 unsigned char v6_addr[16];
-                int i;
-                for (i = 0; i < 16; i += 4) {
-                    *(int *)(v6_addr + i) =
-                            ptrace(PTRACE_PEEKDATA, pid, (void *)&(v6_struct->sin6_addr) + i, 0);
-                }
-                size_t max_len = 39 + 1 + 5 + 1; // v6_addr + : + 65535 + \0
-                char buffer[max_len];
-                snprintf(buffer, max_len,
-                        "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%hu",
-                        v6_addr[0] & 0xFF,v6_addr[1] & 0xFF,v6_addr[2] & 0xFF,v6_addr[3] & 0xFF,
-                        v6_addr[4] & 0xFF,v6_addr[5] & 0xFF,v6_addr[6] & 0xFF,v6_addr[7] & 0xFF,
-                        v6_addr[8] & 0xFF,v6_addr[9] & 0xFF,v6_addr[10] & 0xFF,v6_addr[11] & 0xFF,
-                        v6_addr[12] & 0xFF,v6_addr[13] & 0xFF,v6_addr[14] & 0xFF,v6_addr[15] & 0xFF,
-                        port);
-                catbox_retval_add_violation(ctx, name, "", buffer);
+                peek_buffer(pid, &v6_struct->sin6_addr, v6_addr, 16 / 4);
+
+                char ip_buffer[INET6_ADDRSTRLEN + 1 + 5 + 1] = {0}; // v6_addr + : + 65535 + \0
+                inet_ntop(AF_INET6, v6_addr, ip_buffer, sizeof(ip_buffer));
+                snprintf(ip_buffer + strlen(ip_buffer), 1+5+1, ":%hu", port); // : + 65535 + \0
+                catbox_retval_add_violation(ctx, name, "", ip_buffer);
             } else if (family == AF_UNSPEC) {
                 // ignore this. it's a noop mostly
             } else {
