@@ -14,6 +14,12 @@
 #include <linux/unistd.h>
 #include <fcntl.h>
 #include <stddef.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/un.h>
+#include <sys/socket.h>
+
+#define UNIX_PATH_MAX 108
 
 // System call dispatch flags
 #define CHECK_PATH    1 << 0  // First argument should be a valid path
@@ -76,8 +82,10 @@ static struct syscall_def {
 #endif
 #ifndef __i386__
 	{ __NR_socket,     "socketcall", NET_CALL },
+	{ __NR_connect,    "connect",    NET_CALL },
 #else
 	{ __NR_socketcall, "socketcall", NET_CALL },
+	{ __NR_connect,    "connect",    NET_CALL },
 #endif
 	{ __NR_unlinkat,   "unlinkat",   AT_FAMILY_12 | DONT_FOLLOW},
 	{ __NR_mknodat,    "mknodat",    AT_FAMILY_12},
@@ -308,7 +316,59 @@ found:
 	}
 
 	if (flags & NET_CALL && !ctx->network_allowed) {
-		catbox_retval_add_violation(ctx, name, "", "");
+        if (strncmp("connect", name, 7) == 0) {
+            const struct sockaddr_in * connect_to = (const struct sockaddr_in *)
+                                                        ptrace(PTRACE_PEEKUSER, pid, REG_ARG2, 0);
+            unsigned short * family_pos = (void*)&(connect_to->sin_family);
+            unsigned short family = ptrace(PTRACE_PEEKDATA, pid, family_pos, 0) & 0xFFFF;
+            if (family == AF_INET) {
+                unsigned long * host_pos = (void*)&(connect_to->sin_addr);
+                unsigned short * port_pos = (void*)&(connect_to->sin_port);
+                unsigned long host = ptrace(PTRACE_PEEKDATA, pid, host_pos, 0);
+                unsigned short port = htons(ptrace(PTRACE_PEEKDATA, pid, port_pos, 0) & 0xFFFF);
+                struct in_addr addr;
+                addr.s_addr = host;
+                size_t max_len =  15 + 1 + 5 + 1; // ip + : + 65535 + \0
+                char buffer[max_len];
+                snprintf(buffer, max_len, "%s:%hu", inet_ntoa(addr), port);
+                catbox_retval_add_violation(ctx, name, "", buffer);
+            } else if (family == AF_LOCAL) {
+                const struct sockaddr_un * local_struct = (const struct sockaddr_un *) connect_to;
+                const char socket_name[UNIX_PATH_MAX];
+                int i;
+                for (i = 0; i < UNIX_PATH_MAX; i += 4) {
+                    *(int *)(socket_name + i) =
+                            ptrace(PTRACE_PEEKDATA, pid, (void *)&(local_struct->sun_path) + i, 0);
+                }
+                catbox_retval_add_violation(ctx, name, "", socket_name);
+            } else if (family == AF_INET6) {
+                const struct sockaddr_in6 * v6_struct = (const struct sockaddr_in6 *) connect_to;
+                unsigned short * port_pos = (void*)&(v6_struct->sin6_port);
+                unsigned short port = htons(ptrace(PTRACE_PEEKDATA, pid, port_pos, 0) & 0xFFFF);
+                unsigned char v6_addr[16];
+                int i;
+                for (i = 0; i < 16; i += 4) {
+                    *(int *)(v6_addr + i) =
+                            ptrace(PTRACE_PEEKDATA, pid, (void *)&(v6_struct->sin6_addr) + i, 0);
+                }
+                size_t max_len = 16 + 1 + 5 + 1; // v6_addr + : + 65535 + \0
+                char buffer[max_len];
+                snprintf(buffer, max_len,
+                        "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%hu",
+                        v6_addr[0] & 0xFF,v6_addr[1] & 0xFF,v6_addr[2] & 0xFF,v6_addr[3] & 0xFF,
+                        v6_addr[4] & 0xFF,v6_addr[5] & 0xFF,v6_addr[6] & 0xFF,v6_addr[7] & 0xFF,
+                        v6_addr[8] & 0xFF,v6_addr[9] & 0xFF,v6_addr[10] & 0xFF,v6_addr[11] & 0xFF,
+                        v6_addr[12] & 0xFF,v6_addr[13] & 0xFF,v6_addr[14] & 0xFF,v6_addr[15] & 0xFF,
+                        port);
+                catbox_retval_add_violation(ctx, name, "", buffer);
+            } else if (family == AF_UNSPEC) {
+                // ignore this. it's a noop mostly
+            } else {
+                catbox_retval_add_violation(ctx, name, "", "unknown");
+            }
+        } else {
+    		catbox_retval_add_violation(ctx, name, "", "");
+        }
 		return -EACCES;
 	}
 
