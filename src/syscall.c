@@ -351,7 +351,7 @@ found:
                     *(int *)(v6_addr + i) =
                             ptrace(PTRACE_PEEKDATA, pid, (void *)&(v6_struct->sin6_addr) + i, 0);
                 }
-                size_t max_len = 16 + 1 + 5 + 1; // v6_addr + : + 65535 + \0
+                size_t max_len = 39 + 1 + 5 + 1; // v6_addr + : + 65535 + \0
                 char buffer[max_len];
                 snprintf(buffer, max_len,
                         "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%hu",
