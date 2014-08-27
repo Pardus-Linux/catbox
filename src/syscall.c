@@ -37,6 +37,7 @@
 #define AT_NOFLW_ARG4 1 << 11 // Check fourth argument that contains AT_SYMLINK_NOFOLLOW flag or not
 #define AT_FLW_ARG5   1 << 12 // Check fifth argument that contains AT_SYMLINK_FOLLOW flag or not
 #define AT_NOFLW_ARG5 1 << 13 // Check fitth argument that contains AT_SYMLINK_NOFOLLOW flag or not
+#define CONNECT_CALL  1 << 14 // System call depends on network allowed flag
 
 // System call dispatch table
 static struct syscall_def {
@@ -82,11 +83,11 @@ static struct syscall_def {
 	{ __NR_getegid32,  "getegid32",  FAKE_ID },
 #endif
 #ifndef __i386__
-	{ __NR_socket,     "socketcall", NET_CALL },
-	{ __NR_connect,    "connect",    NET_CALL },
+	{ __NR_socket,     "socketcall", NET_CALL     },
+	{ __NR_connect,    "connect",    CONNECT_CALL },
 #else
-	{ __NR_socketcall, "socketcall", NET_CALL },
-	{ __NR_connect,    "connect",    NET_CALL },
+	{ __NR_socketcall, "socketcall", NET_CALL     },
+	{ __NR_connect,    "connect",    CONNECT_CALL },
 #endif
 	{ __NR_unlinkat,   "unlinkat",   AT_FAMILY_12 | DONT_FOLLOW},
 	{ __NR_mknodat,    "mknodat",    AT_FAMILY_12},
@@ -212,14 +213,14 @@ peek_long (pid_t pid, const void * ptr) {
 
 static unsigned short
 peek_short (pid_t pid, const void * ptr) {
-    return ptrace(PTRACE_PEEKDATA, pid, ptr, 0) & 0xFFFF;
+    return ptrace(PTRACE_PEEKDATA, pid, ptr, 0) & USHRT_MAX; // length agnostic version of 0xFFFFF
 }
 
 static void
 peek_buffer (pid_t pid, const void * ptr, char * buffer, int numwords) {
     int i;
-    for (i = 0; i < numwords*4; i += 4) {
-        *(buffer+i) = peek_long(pid, ptr);
+    for (i = 0; i < numwords*sizeof(long); i += sizeof(long)) {
+        *(unsigned long *)(buffer+i) = peek_long(pid, ptr+i);
     }
 }
 
@@ -334,41 +335,41 @@ found:
 		if (ret) return ret;
 	}
 
-	if (flags & NET_CALL && !ctx->network_allowed) {
-        if (strncmp("connect", name, 7) == 0) {
-            const struct sockaddr_in * connect_to = (const struct sockaddr_in *)
-                                                        ptrace(PTRACE_PEEKUSER, pid, REG_ARG2, 0);
-            unsigned short * family_pos = (void*)&(connect_to->sin_family);
-            unsigned short family = ptrace(PTRACE_PEEKDATA, pid, family_pos, 0) & 0xFFFF;
-            if (family == AF_INET) {
-                unsigned long host = peek_long(pid, &connect_to->sin_addr);
-                unsigned short port = htons(peek_short(pid, &connect_to->sin_port));
-                char buffer[15 + 1 + 5 + 1]; // ip + : + 65535 + \0
-                snprintf(buffer, sizeof(buffer), "%s:%hu", inet_ntoa(*(struct in_addr *)&host), port);
-                catbox_retval_add_violation(ctx, name, "", buffer);
-            } else if (family == AF_LOCAL) {
-                const struct sockaddr_un * local_struct = (const struct sockaddr_un *) connect_to;
-                const char socket_name[UNIX_PATH_MAX];
-                peek_buffer(pid, &local_struct->sun_path, socket_name, UNIX_PATH_MAX / 4);
-                catbox_retval_add_violation(ctx, name, "", socket_name);
-            } else if (family == AF_INET6) {
-                const struct sockaddr_in6 * v6_struct = (const struct sockaddr_in6 *) connect_to;
-                unsigned short port = htons(peek_short(pid, &v6_struct->sin6_port));
-                unsigned char v6_addr[16];
-                peek_buffer(pid, &v6_struct->sin6_addr, v6_addr, 16 / 4);
+    if (flags & CONNECT_CALL && !ctx->network_allowed) {
+        const struct sockaddr_in * connect_to = (const struct sockaddr_in *)
+                                                    ptrace(PTRACE_PEEKUSER, pid, REG_ARG2, 0);
+        unsigned short * family_pos = (void*)&(connect_to->sin_family);
+        unsigned short family = ptrace(PTRACE_PEEKDATA, pid, family_pos, 0) & 0xFFFF;
+        if (family == AF_INET) {
+            unsigned long host = peek_long(pid, &connect_to->sin_addr);
+            unsigned short port = htons(peek_short(pid, &connect_to->sin_port));
+            char buffer[15 + 1 + 5 + 1]; // ip + : + 65535 + \0
+            snprintf(buffer, sizeof(buffer), "%s:%hu", inet_ntoa(*(struct in_addr *)&host), port);
+            catbox_retval_add_violation(ctx, name, "", buffer);
+        } else if (family == AF_LOCAL) {
+            const struct sockaddr_un * local_struct = (const struct sockaddr_un *) connect_to;
+            const char socket_name[UNIX_PATH_MAX];
+            peek_buffer(pid, &local_struct->sun_path, socket_name, UNIX_PATH_MAX / sizeof(long));
+            catbox_retval_add_violation(ctx, name, "", socket_name);
+        } else if (family == AF_INET6) {
+            const struct sockaddr_in6 * v6_struct = (const struct sockaddr_in6 *) connect_to;
+            unsigned short port = htons(peek_short(pid, &v6_struct->sin6_port));
+            unsigned char v6_addr[16];
+            peek_buffer(pid, &v6_struct->sin6_addr, v6_addr, 16 / sizeof(long));
 
-                char ip_buffer[INET6_ADDRSTRLEN + 1 + 5 + 1] = {0}; // v6_addr + : + 65535 + \0
-                inet_ntop(AF_INET6, v6_addr, ip_buffer, sizeof(ip_buffer));
-                snprintf(ip_buffer + strlen(ip_buffer), 1+5+1, ":%hu", port); // : + 65535 + \0
-                catbox_retval_add_violation(ctx, name, "", ip_buffer);
-            } else if (family == AF_UNSPEC) {
-                // ignore this. it's a noop mostly
-            } else {
-                catbox_retval_add_violation(ctx, name, "", "unknown");
-            }
+            char ip_buffer[INET6_ADDRSTRLEN + 1 + 5 + 1] = {0}; // v6_addr + : + 65535 + \0
+            inet_ntop(AF_INET6, v6_addr, ip_buffer, sizeof(ip_buffer));
+            snprintf(ip_buffer + strlen(ip_buffer), 1+5+1, ":%hu", port); // : + 65535 + \0
+            catbox_retval_add_violation(ctx, name, "", ip_buffer);
+        } else if (family == AF_UNSPEC) {
+            // ignore this. it's a noop mostly
         } else {
-    		catbox_retval_add_violation(ctx, name, "", "");
+            catbox_retval_add_violation(ctx, name, "", "unknown");
         }
+    }
+
+	if (flags & NET_CALL && !ctx->network_allowed) {
+        catbox_retval_add_violation(ctx, name, "", "");
 		return -EACCES;
 	}
 
