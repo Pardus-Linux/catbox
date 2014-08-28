@@ -366,6 +366,7 @@ found:
         } else {
             catbox_retval_add_violation(ctx, name, "", "unknown");
         }
+        return -EACCES;
     }
 
 	if (flags & NET_CALL && !ctx->network_allowed) {
