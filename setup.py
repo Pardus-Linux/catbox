@@ -26,7 +26,7 @@ except ImportError as e:
         sys.exit(1)
     bdist_wheel = bdist
 
-version='1.6.2'
+version='1.7.0'
 
 distfiles = """
     setup.py
