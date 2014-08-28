@@ -53,10 +53,12 @@ class TestSocketViolations(T.TestCase):
         code, v = _catbox_it(run)
         self.assertEquals(0, code)
         self.assert_violations(v, 'connect', ['%s:%d' % (host, port)])
-        self.assertTrue(len(v) in [2,3])  ## XXX: I don't know why this happens:
-                                          ##      in ipv6 there is an extra
-                                          ##      socketcall violation reported
-                                          ##      for "connect"
+
+        ## XXX: On some systems with more than 1 interface, ipv6 connect
+        ##        may cause an additional socket of type AF_NETLINK to be
+        ##        created. This is why we allow one or two socket calls
+        ##        in this test
+        self.assertTrue(len(v) in [2,3])
         self.assert_violations(v, 'socketcall', len(v)-1)
         s1.close()
 
