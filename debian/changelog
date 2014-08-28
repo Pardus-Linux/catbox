@@ -1,3 +1,9 @@
+python-catbox (1.7.0-yelp1) lucid; urgency=low
+
+  * connect syscall support
+
+ -- Baris Metin <bmetin@yelp.com>  Thu, 28 Aug 2014 13:31:55 -0700
+
 python-catbox (1.6.1-yelp1) lucid; urgency=low
 
   * Bump version for setup.py fixes 
